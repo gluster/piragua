@@ -1,0 +1,6 @@
+[package]
+name = "gluster_flexvol"
+version = "0.1.0"
+authors = ["Chris Holcombe <xfactor973@gmail.com>"]
+
+[dependencies]
