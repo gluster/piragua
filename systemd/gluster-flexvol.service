@@ -1,0 +1,16 @@
+[Unit]
+Description=Gluster Thin Heketi Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/gluster-flexvol
+ExecReload=/bin/kill -SIGTERM $MAINPID
+KillMode=process
+Restart=on-failure
+LimitNOFILE=infinity
+LimitNPROC=infinity
+TasksMax=infinity
+
+[Install]
+Alias=gluster-flexvol.service

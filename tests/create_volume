@@ -1,0 +1,17 @@
+{
+    "size": 10000000,
+    "snapshot": {
+        "enable": true,
+        "factor": 1.2
+    },
+    "durability": {
+        "type": "replicate",
+        "replicate": {
+            "replica": 3
+        }
+    },
+    "clusters": [
+        "2f84c71240f43e16808bc64b05ad0d06",
+        "5a2c52d04075373e80dbfa1e291ba0de"
+    ]
+}

@@ -1,0 +1,9 @@
+[development]
+log = "debug"
+port = 8080
+
+[staging]
+log = "normal"
+
+[production]
+log = "critical"
