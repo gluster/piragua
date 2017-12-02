@@ -5,12 +5,15 @@ authors = ["Chris Holcombe <xfactor973@gmail.com>"]
 
 [dependencies]
 clap = "*"
-gfapi-sys  = "~0.3"
-# jsonwebtoken = "~4"
+gfapi-sys  = "~0.3" # gfapi
+gluster = "~0.7" # CLI library
+itertools = "*"
+libc = "*"
+frank_jwt = "~2.5"
 log = "*"
 rocket = "~0.3"
 rocket_codegen = "~0.3"
 rocket_contrib = "~0.3"
 serde = "~1.0"
 serde_derive = "~1.0"
-# serde_json = "~1.0"
+uuid = {version="*", features = ["v4"] }
