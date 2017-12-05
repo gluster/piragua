@@ -11,26 +11,29 @@ extern crate rocket;
 #[macro_use]
 extern crate rocket_contrib;
 extern crate serde;
+extern crate serde_json;
 #[macro_use]
 extern crate serde_derive;
 extern crate uuid;
 
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::{BufRead, BufReader, Read};
+use std::fs::{self, File};
+use std::io::{BufRead, BufReader, Cursor, Error, ErrorKind, Read};
 use std::io::Result as IOResult;
+use std::net::IpAddr;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::sync::Mutex;
 
 use clap::{Arg, App};
 use gfapi_sys::gluster::*;
+use gluster::get_local_ip;
 use gluster::peer::peer_list;
-use gluster::volume::volume_info;
 use itertools::Itertools;
 use libc::{S_IRGRP, S_IWGRP, S_IXGRP, S_IRWXU, S_IRUSR, S_IWUSR, S_IXUSR};
 use rocket_contrib::Json;
 use rocket::{Request, Response, State};
-use rocket::http::Status;
+use rocket::http::{ContentType, Status};
 use rocket::http::hyper::header::Location;
 use rocket::response::status::{Accepted, Created};
 use uuid::Uuid;
@@ -102,7 +105,7 @@ struct Durability {
     #[serde(rename = "type")]
     mount_type: Option<VolumeType>,
     replicate: Option<ReplicaDurability>,
-    diperse: Option<DisperseDurability>,
+    //disperse: Option<DisperseDurability>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -120,6 +123,7 @@ struct Mount {
 
 #[derive(Debug, Serialize)]
 struct GlusterFsMount {
+    hosts: Vec<String>,
     device: String,
     options: HashMap<String, String>,
 }
@@ -181,14 +185,12 @@ struct Storage {
 #[derive(Debug, Serialize)]
 struct NodeInfoResponse {
     zone: u8,
-    id: String,
-    cluster: String,
     hostnames: ManagedHosts,
-    devices: Vec<DeviceInfo>,
+    cluster: String,
+    id: Uuid,
     state: String,
+    devices: Vec<DeviceInfo>,
 }
-
-
 
 #[post("/clusters", format = "application/json")]
 fn create_cluster(state: State<Gluster>) -> Created<Json<GlusterClusters>> {
@@ -209,8 +211,11 @@ fn get_cluster_info(
     let mut vol_list: Vec<String> = vec![];
 
     // Get all the peers in the cluster
-    let peers = peer_list().map_err(|e| e.to_string())?;
-    let servers: Vec<String> = peers.iter().map(|ref p| p.hostname.clone()).collect();
+    let local_uuid = get_local_uuid().map_err(|e| e.to_string())?;
+    let mut peer_uuids = get_peer_uuids().map_err(|e| e.to_string())?;
+    if let Some(local) = local_uuid {
+        peer_uuids.push(local);
+    }
 
     //List all the top level directories and return them as volumes
     let d =
@@ -226,7 +231,11 @@ fn get_cluster_info(
 
     let clusters = GlusterClusters {
         id: cluster_id,
-        nodes: servers,
+        // Transform to Vec of String's
+        nodes: peer_uuids
+            .iter()
+            .map(|uuid| uuid.hyphenated().to_string())
+            .collect::<Vec<String>>(),
         volumes: vol_list,
     };
 
@@ -237,6 +246,10 @@ fn get_cluster_info(
 fn list_clusters(state: State<String>) -> Json<ClusterList> {
     // Only return the single volume as a cluster
     let clusters = ClusterList { clusters: vec![state.inner().clone()] };
+    println!(
+        "list clusters: {}",
+        serde_json::to_string(&clusters).unwrap()
+    );
     Json(clusters)
 }
 
@@ -247,25 +260,51 @@ fn delete_cluster(id: String, state: State<Gluster>) {
 
 #[get("/nodes/<id>", format = "application/json")]
 fn get_node_info(id: String, state: State<Gluster>) -> Result<Json<NodeInfoResponse>, String> {
-    let hostname = {
-        let mut f = File::open("/etc/hostname").map_err(|e| e.to_string())?;
-        let mut s = String::new();
-        f.read_to_string(&mut s).map_err(|e| e.to_string())?;
-        s.trim().to_string()
-    };
+    // heketi thinks this is a mgmt node
+    // get info on 192.168.1.2
+    let node_uuid = Uuid::from_str(&id).map_err(|e| e.to_string())?;
+    let local_uuid = get_local_uuid().map_err(|e| e.to_string())?;
+    let host_ip: IpAddr;
+
+    match local_uuid {
+        Some(local) => {
+            //is this my local uuid?
+            if local == node_uuid {
+                host_ip = get_local_ip().map_err(|e| e.to_string())?;
+            } else {
+                // It's not so lets see if it's one of my peers
+                host_ip = match get_peer_info(&node_uuid).map_err(|e| e.to_string())? {
+                    Some(ip) => ip,
+                    None => {
+                        //It's not my local or a peer.  I don't know what this is
+                        println!("get_node_info discovery failed for: {}", id);
+                        return Err(format!("Unable to find info for {}", id));
+                    }
+                };
+            }
+        }
+        None => {
+            // I can't find my local uuid so fail. Is gluster not running?
+            return Err("Unable to find local gluster uuid".to_string());
+        }
+    }
 
     let resp = NodeInfoResponse {
         zone: 1,
-        id: id,
+        id: node_uuid,
         cluster: "cluster-test".into(),
         hostnames: ManagedHosts {
             // Everyone manages themselves
-            manage: vec![hostname.clone()],
-            storage: vec![hostname],
+            manage: vec![host_ip.to_string()],
+            storage: vec![host_ip.to_string()],
         },
         devices: vec![],
         state: "online".into(),
     };
+    println!(
+        "node info response: {}",
+        serde_json::to_string(&resp).unwrap()
+    );
     Ok(Json(resp))
 }
 
@@ -347,12 +386,60 @@ fn create_volume<'a>(
 
     let mut response = Response::new();
     response.set_header(Location(format!("/volumes/{}", vol_name)));
-    response.set_status(Status::new(303, "Volume created"));
+    response.set_status(Status::Accepted);
+    //response.set_status(Status::new(303, "Volume created"));
+    //response.set_status(Status::new(202, "Volume created"));
 
     Ok(response)
 }
 
-fn gluster_vols(vol_id: &str) -> IOResult<HashMap<String, String>> {
+// List the peer uuids but not the local one.  Use get_local_uuid for that
+fn get_peer_uuids() -> IOResult<Vec<Uuid>> {
+    let mut uuids: Vec<Uuid> = Vec::new();
+    for entry in fs::read_dir(Path::new("/var/lib/glusterd/peers"))? {
+        let entry = entry?;
+        let u = Uuid::from_str(&entry.file_name().to_string_lossy())
+            .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+        uuids.push(u);
+    }
+    Ok(uuids)
+}
+
+// Get the local uuid for this glusterd
+fn get_local_uuid() -> IOResult<Option<Uuid>> {
+    let f = File::open("/var/lib/glusterd/glusterd.info")?;
+    let f = BufReader::new(f);
+    for line in f.lines() {
+        let l = line?;
+        if l.starts_with("UUID") {
+            let l = l.replace("UUID=", "");
+            let guid = Uuid::from_str(&l).map_err(|e| {
+                Error::new(ErrorKind::Other, e.to_string())
+            })?;
+            return Ok(Some(guid));
+        }
+    }
+    Ok(None)
+}
+
+// Get the gluster peer ip address
+fn get_peer_info(uuid: &Uuid) -> IOResult<Option<IpAddr>> {
+    let f = File::open(format!("/var/lib/glusterd/peers/{}", uuid.hyphenated()))?;
+    let f = BufReader::new(f);
+    for line in f.lines() {
+        let l = line?;
+        if l.starts_with("hostname") {
+            let l = l.replace("hostname1=", "");
+            let ip_addr = IpAddr::from_str(&l).map_err(
+                |e| Error::new(ErrorKind::Other, e),
+            )?;
+            return Ok(Some(ip_addr));
+        }
+    }
+    Ok(None)
+}
+
+fn get_gluster_vol(vol_id: &str) -> IOResult<HashMap<String, String>> {
     let vol_file = File::open(format!("/var/lib/glusterd/vols/{}/info", vol_id))?;
     let mut vol_data = HashMap::new();
     let f = BufReader::new(vol_file);
@@ -369,14 +456,15 @@ fn gluster_vols(vol_id: &str) -> IOResult<HashMap<String, String>> {
 }
 
 #[get("/volumes/<vol_id>", format = "application/json")]
-fn get_volume_info(
+fn get_volume_info<'a>(
     vol_id: String,
     state: State<Gluster>,
     vol_name: State<String>,
-) -> Result<Json<VolumeInfo>, String> {
+) -> Result<Response<'a>, String> {
     // Use this to get the backup-volfile-server info
     //let vol_info = volume_info(&vol_name).map_err(|e| e.to_string())?;
-    let vol_info = gluster_vols(&vol_name).map_err(|e| e.to_string())?;
+
+    let vol_info = get_gluster_vol(&vol_name).map_err(|e| e.to_string())?;
     let peers = peer_list().map_err(|e| e.to_string())?;
 
     let mut brick_info: Vec<Brick> = Vec::new();
@@ -403,7 +491,7 @@ fn get_volume_info(
         backup_servers.iter().join(",").to_string(),
     );
 
-    let response = VolumeInfo {
+    let response_data = VolumeInfo {
         name: vol_id.clone(),
         id: vol_info.get("volume-id").unwrap().clone(), //.hyphenated().to_string(),
         cluster: "cluster-test".into(),
@@ -411,7 +499,7 @@ fn get_volume_info(
         durability: Durability {
             mount_type: Some(VolumeType::Replicate),
             replicate: Some(ReplicaDurability { replica: Some(3) }),
-            diperse: None,
+            //disperse: None,
         },
         snapshot: Snapshot {
             enable: Some(true),
@@ -419,6 +507,7 @@ fn get_volume_info(
         },
         mount: Mount {
             glusterfs: GlusterFsMount {
+                hosts: backup_servers,
                 device: format!(
                     "{server}:/{volume}/{path}",
                     server = peers[0].hostname,
@@ -430,8 +519,17 @@ fn get_volume_info(
         },
         bricks: vec![],
     };
-    println!("VolumeInfo: {:#?}", response);
-    Ok(Json(response))
+    println!(
+        "VolumeInfo: {}",
+        serde_json::to_string(&response_data).unwrap()
+    );
+    let mut response = Response::build()
+        .header(ContentType::JSON)
+        .raw_header("X-Pending", "false")
+        .sized_body(Cursor::new(serde_json::to_string(&response_data).unwrap()))
+        .finalize();
+    println!("response: {:#?}", response);
+    Ok(response) //(Json(response)))
 }
 
 #[post("/volumes/<id>/expand", format = "application/json", data = "<input>")]
