@@ -12,5 +12,10 @@ The 3.12 release introduced deep mount support for fuse.
 * Run `cargo build --release` with a nightly version of rust to build
 
 ## Deploying
-* Install the deb/rpm package for this on your glusterfs cluster and
-enable/start the systemd service.
+* Install the deb/rpm package for this on all of the glusterfs servers 
+* Set the correct environment variables in the 
+`/etc/gluster-flexvol/environment` file.
+* enable/start the systemd service.
+
+Big thanks to Miranda Shutt and David Hocky for helping me debug this
+with openshift and kubernetes!  

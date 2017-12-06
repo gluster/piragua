@@ -3,12 +3,12 @@
 
 #[macro_use]
 extern crate clap;
+extern crate frank_jwt;
 extern crate gfapi_sys;
 extern crate gluster;
 extern crate itertools;
 extern crate libc;
 extern crate rocket;
-#[macro_use]
 extern crate rocket_contrib;
 extern crate serde;
 extern crate serde_json;
@@ -17,6 +17,7 @@ extern crate serde_derive;
 extern crate uuid;
 
 use std::collections::HashMap;
+use std::env;
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Cursor, Error, ErrorKind};
 use std::io::Result as IOResult;
@@ -29,13 +30,15 @@ use clap::{Arg, App};
 use gfapi_sys::gluster::*;
 use gluster::get_local_ip;
 use gluster::peer::peer_list;
-use gluster::volume::{quota_list, volume_add_quota, volume_remove_quota};
+use gluster::volume::volume_add_quota;
 use itertools::Itertools;
-use libc::{S_IRGRP, S_IWGRP, S_IXGRP, S_IRWXU, S_IRUSR, S_IWUSR, S_IXUSR};
+use frank_jwt::{Algorithm, decode, Header, Payload};
+use libc::{S_IRGRP, S_IWGRP, S_IXGRP, S_IRWXU, S_IRUSR, S_IXUSR};
 use rocket_contrib::Json;
-use rocket::{Request, Response, State};
+use rocket::{Outcome, Request, Response, State};
 use rocket::http::{ContentType, Status};
 use rocket::http::hyper::header::Location;
+use rocket::request::{self, FromRequest};
 use rocket::response::status::Created;
 use uuid::Uuid;
 
@@ -193,8 +196,47 @@ struct NodeInfoResponse {
     devices: Vec<DeviceInfo>,
 }
 
+// Json Web Token
+struct Jwt((Header, Payload));
+
+impl<'a, 'r> FromRequest<'a, 'r> for Jwt {
+    type Error = String;
+
+    fn from_request(request: &'a Request<'r>) -> request::Outcome<Jwt, Self::Error> {
+        let secret = match env::var("JWT_SECRET") {
+            Ok(s) => s,
+            Err(_) => {
+                return Outcome::Failure((
+                    Status::PreconditionFailed,
+                    "JWT_SECRET env variable missing".into(),
+                ));
+            }
+        };
+        let token_header = request.headers().get_one("Authorization");
+        match token_header {
+            Some(auth_token) => {
+                let token_data = match decode(auth_token.to_string(), secret, Algorithm::HS256) {
+                    Ok(data) => data,
+                    Err(_) => {
+                        return Outcome::Failure((Status::BadRequest, "JWT decode failed".into()));
+                    }
+                };
+                return Outcome::Success(Jwt(token_data));
+            }
+            None => {
+                return Outcome::Failure((
+                    Status::BadRequest,
+                    "JWT token missing from request".into(),
+                ));
+            }
+        };
+    }
+}
+
+
+
 #[post("/clusters", format = "application/json")]
-fn create_cluster(state: State<Gluster>) -> Created<Json<GlusterClusters>> {
+fn create_cluster() -> Created<Json<GlusterClusters>> {
     let clusters = GlusterClusters {
         id: "cluster-test".to_string(),
         nodes: vec![],
@@ -255,12 +297,12 @@ fn list_clusters(state: State<String>) -> Json<ClusterList> {
 }
 
 #[delete("/clusters/<id>", format = "application/json")]
-fn delete_cluster(id: String, state: State<Gluster>) {
+fn delete_cluster(id: String) {
     //json!({ "status": "ok" })
 }
 
 #[get("/nodes/<id>", format = "application/json")]
-fn get_node_info(id: String, state: State<Gluster>) -> Result<Json<NodeInfoResponse>, String> {
+fn get_node_info(id: String) -> Result<Json<NodeInfoResponse>, String> {
     // heketi thinks this is a mgmt node
     // get info on 192.168.1.2
     let node_uuid = Uuid::from_str(&id).map_err(|e| e.to_string())?;
@@ -310,7 +352,7 @@ fn get_node_info(id: String, state: State<Gluster>) -> Result<Json<NodeInfoRespo
 }
 
 #[delete("/nodes/<id>", format = "application/json")]
-fn delete_node(id: String, state: State<Gluster>) -> Result<Response, String> {
+fn delete_node<'a>(id: String) -> Result<Response<'a>, String> {
     //NOPE you're not allowed
     let mut response = Response::new();
     response.set_status(Status::new(204, "Volume created"));
@@ -318,7 +360,7 @@ fn delete_node(id: String, state: State<Gluster>) -> Result<Response, String> {
 }
 
 #[post("/nodes", format = "application/json", data = "<input>")]
-fn add_node(input: Json<AddNodeRequest>, state: State<Gluster>) -> Result<Response, String> {
+fn add_node<'a>(input: Json<AddNodeRequest>) -> Result<Response<'a>, String> {
     //NOPE you're not allowed
     let mut response = Response::new();
     response.set_status(Status::new(204, "Volume created"));
@@ -326,7 +368,7 @@ fn add_node(input: Json<AddNodeRequest>, state: State<Gluster>) -> Result<Respon
 }
 
 #[post("/devices", format = "application/json", data = "<input>")]
-fn add_device(input: Json<AddDeviceRequest>, state: State<Gluster>) -> Result<Response, String> {
+fn add_device<'a>(input: Json<AddDeviceRequest>) -> Result<Response<'a>, String> {
     //NOPE you're not allowed
     let mut response = Response::new();
     response.set_status(Status::new(204, "Volume created"));
@@ -334,7 +376,7 @@ fn add_device(input: Json<AddDeviceRequest>, state: State<Gluster>) -> Result<Re
 }
 
 #[delete("/devices/<id>", format = "application/json")]
-fn delete_device(id: String, state: State<Gluster>) -> Result<Response, String> {
+fn delete_device<'a>(id: String) -> Result<Response<'a>, String> {
     //NOPE you're not allowed
     let mut response = Response::new();
     response.set_status(Status::new(204, "Volume created"));
@@ -342,7 +384,7 @@ fn delete_device(id: String, state: State<Gluster>) -> Result<Response, String> 
 }
 
 #[get("/devices/<device_id>", format = "application/json")]
-fn get_device_info(device_id: String, state: State<Gluster>) -> Json<DeviceInfo> {
+fn get_device_info(device_id: String) -> Json<DeviceInfo> {
     let device_info = DeviceInfo {
         name: PathBuf::from("/dev/sda"), //": "/dev/sdh",
         storage: Storage {
@@ -470,15 +512,10 @@ fn get_gluster_vol(vol_id: &str) -> IOResult<HashMap<String, String>> {
 }
 
 #[get("/volumes/<vol_id>", format = "application/json")]
-fn get_volume_info<'a>(
-    vol_id: String,
-    state: State<Gluster>,
-    vol_name: State<String>,
-) -> Result<Response<'a>, String> {
+fn get_volume_info<'a>(vol_id: String, vol_name: State<String>) -> Result<Response<'a>, String> {
     let vol_info = get_gluster_vol(&vol_name).map_err(|e| e.to_string())?;
     let peers = peer_list().map_err(|e| e.to_string())?;
 
-    let mut brick_info: Vec<Brick> = Vec::new();
     for item in &vol_info {
         if item.0.starts_with("brick") {
             /*
@@ -503,7 +540,7 @@ fn get_volume_info<'a>(
     );
 
     let response_data = VolumeInfo {
-        name: format!("vol_{volume}/{path}", volume = *vol_name, path = &vol_id),
+        name: format!("{volume}/{path}", volume = *vol_name, path = &vol_id),
         id: vol_id.clone(),
         cluster: "cluster-test".into(),
         // TODO: This should be changed to the quota size
@@ -534,7 +571,7 @@ fn get_volume_info<'a>(
         "VolumeInfo: {}",
         serde_json::to_string(&response_data).unwrap()
     );
-    let mut response = Response::build()
+    let response = Response::build()
         .header(ContentType::JSON)
         .raw_header("X-Pending", "false")
         .sized_body(Cursor::new(serde_json::to_string(&response_data).unwrap()))
