@@ -18,7 +18,7 @@ extern crate uuid;
 
 use std::collections::HashMap;
 use std::fs::{self, File};
-use std::io::{BufRead, BufReader, Cursor, Error, ErrorKind, Read};
+use std::io::{BufRead, BufReader, Cursor, Error, ErrorKind};
 use std::io::Result as IOResult;
 use std::net::IpAddr;
 use std::path::{Path, PathBuf};
@@ -29,13 +29,14 @@ use clap::{Arg, App};
 use gfapi_sys::gluster::*;
 use gluster::get_local_ip;
 use gluster::peer::peer_list;
+use gluster::volume::{quota_list, volume_add_quota, volume_remove_quota};
 use itertools::Itertools;
 use libc::{S_IRGRP, S_IWGRP, S_IXGRP, S_IRWXU, S_IRUSR, S_IWUSR, S_IXUSR};
 use rocket_contrib::Json;
 use rocket::{Request, Response, State};
 use rocket::http::{ContentType, Status};
 use rocket::http::hyper::header::Location;
-use rocket::response::status::{Accepted, Created};
+use rocket::response::status::Created;
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -359,15 +360,17 @@ fn get_device_info(device_id: String, state: State<Gluster>) -> Json<DeviceInfo>
 fn create_volume<'a>(
     input: Json<CreateVolumeRequest>,
     state: State<Gluster>,
+    vol_name: State<String>,
 ) -> Result<Response<'a>, String> {
     println!("volume request: {:#?}", input);
-    let vol_name = if input.name == "" {
+
+    let vol_id = if input.name == "" {
         let u = Uuid::new_v4();
-        format!("vol_{}", u.hyphenated().to_string())
+        u.hyphenated().to_string()
     } else {
         input.name.clone()
     };
-    let dir_path = Path::new(&vol_name);
+    let dir_path = Path::new(&vol_id);
 
     // Create the mount point on the cluster
     if !state.exists(&dir_path).map_err(|e| e.to_string())? {
@@ -384,11 +387,22 @@ fn create_volume<'a>(
         .chmod(&dir_path, S_IRUSR | S_IXUSR | S_IRGRP | S_IWGRP | S_IXGRP)
         .map_err(|e| e.to_string())?;
 
+    let quota_path = PathBuf::from(format!("/{}", vol_id));
+    println!(
+        "Adding {}GB sized quota to: {}",
+        input.size,
+        quota_path.display()
+    );
+    match volume_add_quota(&vol_name, &quota_path, input.size * 1024 * 1024 * 1024) {
+        Ok(_) => {}
+        Err(e) => {
+            println!("volume_add_quota_failed: {}", e.to_string());
+        }
+    }
+
     let mut response = Response::new();
-    response.set_header(Location(format!("/volumes/{}", vol_name)));
+    response.set_header(Location(format!("/volumes/{}", vol_id)));
     response.set_status(Status::Accepted);
-    //response.set_status(Status::new(303, "Volume created"));
-    //response.set_status(Status::new(202, "Volume created"));
 
     Ok(response)
 }
@@ -461,9 +475,6 @@ fn get_volume_info<'a>(
     state: State<Gluster>,
     vol_name: State<String>,
 ) -> Result<Response<'a>, String> {
-    // Use this to get the backup-volfile-server info
-    //let vol_info = volume_info(&vol_name).map_err(|e| e.to_string())?;
-
     let vol_info = get_gluster_vol(&vol_name).map_err(|e| e.to_string())?;
     let peers = peer_list().map_err(|e| e.to_string())?;
 
@@ -492,14 +503,14 @@ fn get_volume_info<'a>(
     );
 
     let response_data = VolumeInfo {
-        name: vol_id.clone(),
-        id: vol_info.get("volume-id").unwrap().clone(), //.hyphenated().to_string(),
+        name: format!("vol_{volume}/{path}", volume = *vol_name, path = &vol_id),
+        id: vol_id.clone(),
         cluster: "cluster-test".into(),
+        // TODO: This should be changed to the quota size
         size: 10,
         durability: Durability {
             mount_type: Some(VolumeType::Replicate),
             replicate: Some(ReplicaDurability { replica: Some(3) }),
-            //disperse: None,
         },
         snapshot: Snapshot {
             enable: Some(true),
@@ -529,23 +540,46 @@ fn get_volume_info<'a>(
         .sized_body(Cursor::new(serde_json::to_string(&response_data).unwrap()))
         .finalize();
     println!("response: {:#?}", response);
-    Ok(response) //(Json(response)))
+    Ok(response)
 }
 
-#[post("/volumes/<id>/expand", format = "application/json", data = "<input>")]
-fn expand_volume(id: String, input: Json<ExpandVolumeRequest>, state: State<Gluster>) -> Response {
+#[post("/volumes/<vol_name>/<id>/expand", format = "application/json", data = "<input>")]
+fn expand_volume<'a>(
+    vol_name: String,
+    id: String,
+    input: Json<ExpandVolumeRequest>,
+) -> Result<Response<'a>, String> {
+
     let mut response = Response::new();
-    response.set_status(Status::new(204, "Volume expanded"));
-    response
+    response.set_header(Location(format!("/volumes/{}/{}", vol_name, id)));
+    response.set_status(Status::Accepted);
+
+    // If this doesn't have a quota already it'll fail to remove
+    let quota_path = PathBuf::from(format!("/{}", id));
+    // input.expand_size needs to be converted to bytes from GB of input
+    volume_add_quota(
+        &vol_name,
+        &quota_path,
+        input.expand_size * 1024 * 1024 * 1024,
+    ).map_err(|e| e.to_string())?;
+
+    Ok(response)
 }
 
-#[delete("/volumes/<vol_id>")]
-fn delete_volume<'a>(vol_id: String, state: State<Gluster>) -> Result<Response<'a>, String> {
+#[delete("/volumes/<vol_name>/<vol_id>")]
+fn delete_volume<'a>(
+    vol_name: String,
+    vol_id: String,
+    state: State<Gluster>,
+) -> Result<Response<'a>, String> {
     // Clients will keep calling this and we need to return 204 when it's finished
     // This works out well because rm -rf could take awhile.
     let mut response = Response::new();
     response.set_status(Status::Accepted);
     response.set_header(Location(format!("/volumes/{}", vol_id)));
+
+    // Split this into the volume_name/volume_id and just delete the volume_id
+    println!("Deleting {}", vol_id);
 
     // Delete the directory.
     // TODO: How can we background this and tell the client to come back later?

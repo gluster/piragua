@@ -6,7 +6,7 @@ authors = ["Chris Holcombe <xfactor973@gmail.com>"]
 [dependencies]
 clap = "*"
 gfapi-sys  = "~0.3" # gfapi
-gluster = "~0.7" # CLI library
+gluster = "~0.8" # CLI library
 itertools = "*"
 libc = "*"
 frank_jwt = "~2.5"
