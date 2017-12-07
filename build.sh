@@ -42,7 +42,7 @@ if [ "$distro" = "centos7" ]
     then
 	lxc exec --verbose $container -- /bin/sh -c "yum update"
 	echo "installing centos-release-gluster"
-	lxc exec --verbose $container -- /bin/sh -c "yum install -y centos-release-gluster"
+	lxc exec --verbose $container -- /bin/sh -c "yum install -y centos-release-gluster openssl-devel.x86_64"
 	echo "installing gfapi"
     packages="glusterfs-api-devel glusterfs-api gcc"
 	lxc exec --verbose $container -- /bin/sh -c "yum install -y $packages"
