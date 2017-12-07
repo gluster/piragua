@@ -1,7 +1,8 @@
 [package]
 name = "gluster-flexvol"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Chris Holcombe <xfactor973@gmail.com>"]
+license = "apache2"
 
 [dependencies]
 base64 = "*"
