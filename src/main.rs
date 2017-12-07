@@ -1,6 +1,7 @@
 #![feature(plugin, decl_macro)]
 #![plugin(rocket_codegen)]
 
+extern crate base64;
 #[macro_use]
 extern crate clap;
 //extern crate frank_jwt;
@@ -27,13 +28,14 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Mutex;
 
+use base64::decode as base64_decode;
 use clap::{Arg, App};
 use gfapi_sys::gluster::*;
 use gluster::get_local_ip;
 use gluster::peer::peer_list;
 use gluster::volume::volume_add_quota;
 use itertools::Itertools;
-use jsonwebtoken::{decode, Validation};
+use jsonwebtoken::{Algorithm, decode, Validation};
 use libc::{S_IRGRP, S_IWGRP, S_IXGRP, S_IRWXU, S_IRUSR, S_IXUSR};
 use rocket_contrib::Json;
 use rocket::{Outcome, Request, Response, State};
@@ -200,8 +202,8 @@ struct NodeInfoResponse {
 #[derive(Debug, Serialize, Deserialize)]
 struct Claims {
     iss: String,
-    iat: String,
-    exp: String,
+    iat: u64,
+    exp: u64,
     qsh: String,
 }
 
@@ -214,28 +216,35 @@ impl<'a, 'r> FromRequest<'a, 'r> for Jwt {
     fn from_request(request: &'a Request<'r>) -> request::Outcome<Jwt, Self::Error> {
         let secret = match env::var("JWT_SECRET") {
             Ok(s) => s,
-            Err(_) => {
-                return Outcome::Failure((
-                    Status::PreconditionFailed,
-                    "JWT_SECRET env variable missing".into(),
-                ));
+            Err(e) => {
+                return Outcome::Failure((Status::PreconditionFailed, e.to_string()));
+            }
+        };
+        let secret_decoded = match base64_decode(&secret) {
+            Ok(s) => s,
+            Err(e) => {
+                println!("Secret decoding failed: {:?}", e);
+                return Outcome::Failure((Status::PreconditionFailed, e.to_string()));
             }
         };
         let token_header = request.headers().get_one("Authorization");
         match token_header {
             Some(auth_token) => {
-                println!("auth_header: {}", auth_token);
+                // Set the default params for validation
+                let mut validate = Validation::default();
+                validate.algorithms = Some(vec![Algorithm::HS256]); // set our Algorithm
+                validate.leeway = 1000 * 60; // Add 1 minute of leeway for clock skew
+                validate.validate_nbf = false;
+
                 let auth_parts: Vec<&str> = auth_token.split_whitespace().collect();
-                let token_data = match decode::<Claims>(
-                    auth_parts[1],
-                    secret.as_bytes(),
-                    &Validation::default(),
-                ) {
-                    Ok(data) => data,
-                    Err(e) => {
-                        return Outcome::Failure((Status::BadRequest, e.to_string()));
-                    }
-                };
+                let token_data =
+                    match decode::<Claims>(auth_parts[1], &secret_decoded, &validate) {
+                        Ok(data) => data,
+                        Err(e) => {
+                            println!("jwt decode failed: {:?}", e);
+                            return Outcome::Failure((Status::BadRequest, e.to_string()));
+                        }
+                    };
                 return Outcome::Success(Jwt(token_data.claims));
             }
             None => {
