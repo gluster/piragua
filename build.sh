@@ -1,27 +1,56 @@
-if [ -z "$1" ]
-  then
-    echo "No argument supplied, requires build version"
-    exit 1
+#!/bin/bash
+
+distro=""
+path=""
+
+while getopts ":d:p:" opt; do
+  case $opt in
+    d)
+      distro=$OPTARG
+      ;;
+    p)
+      path=$OPTARG
+      ;;
+    \?)
+      echo "Usage $0 -d (centos|ubuntu) -p /path/to/build"
+      exit -1
+      ;;
+    : )
+      echo "Usage $0 -d (centos|ubuntu) -p /path/to/build"
+      exit -1
+      ;;
+  esac
+done
+shift $((OPTIND - 1))
+
+if [ "x${distro}" == "x" ]
+then
+  echo "Usage $0 -d (centos|ubuntu) -p /path/to/build"
+  exit -1
 fi
 
+if [ "x${path}" == "x" ]
+then
+  echo "Usage $0 -d (centos|ubuntu) -p /path/to/build"
+  exit -1
+fi
+ 
+  
 set -euo pipefail
 
-distro=$1
-path=`pwd`
-echo "About to launch $distro container"
+echo "About to launch ${distro} container"
 container="gluster-flexvol-build-$RANDOM"
 
-function finish {
-    echo "Cleaning up: ($?)!"
-    docker kill $container
-	sleep 5
-    docker rm $container
-    echo "finished cleaning up"
-}
-trap finish EXIT
+#function finish {
+#    echo "Cleaning up: ($?)!"
+#    docker kill $container
+#    docker rm $container
+#    echo "finished cleaning up"
+#}
+#trap finish EXIT
 
 echo "Named container: $container"
-docker run --name $container -d -i -t -v $path:/build -w /build $distro
+docker run --name $container -d -i -t -v $path:/build:z -w /build $distro
 echo "Launched $container"
 
 docker exec $container ls /build/
@@ -45,7 +74,7 @@ if [[ "$distro" == ubuntu* ]]
 	docker exec $container apt update
 	echo "installing gfapi"
     packages="glusterfs gcc"
-	docker exec $container apt install -y $packages
+	docker exec $container yum install -y $packages
 fi
 
 echo "About to install rust"
@@ -62,4 +91,3 @@ echo "Release directory"
 ls $path/target/release/
 docker exec $container mv target/release/gluster-flexvol target/release/gluster-flexvol-$distro
 
-finish
