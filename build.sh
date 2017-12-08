@@ -14,6 +14,7 @@ container="gluster-flexvol-build-$RANDOM"
 function finish {
     echo "Cleaning up: ($?)!"
     docker kill $container
+	sleep 5
     docker rm $container
     echo "finished cleaning up"
 }
@@ -44,7 +45,7 @@ if [[ "$distro" == ubuntu* ]]
 	docker exec $container apt update
 	echo "installing gfapi"
     packages="glusterfs gcc"
-	docker exec $container yum install -y $packages
+	docker exec $container apt install -y $packages
 fi
 
 echo "About to install rust"
