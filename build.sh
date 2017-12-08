@@ -26,7 +26,6 @@ echo "Launched $container"
 docker exec $container ls /build/
 
 echo "Installing deps"
-packages="libssl-dev protobuf-compiler libprotobuf-dev libsodium-dev liblzma-dev pkg-config"
 if [[ "$distro" == centos* ]]
     then
 	docker exec $container yum update -y
@@ -34,6 +33,17 @@ if [[ "$distro" == centos* ]]
 	docker exec $container yum install -y centos-release-gluster openssl-devel.x86_64
 	echo "installing gfapi"
     packages="glusterfs-api-devel glusterfs-api gcc"
+	docker exec $container yum install -y $packages
+fi
+
+if [[ "$distro" == ubuntu* ]]
+    then
+	docker exec $container apt update
+	echo "installing gluster"
+    docker exec $container add-apt-repository ppa:gluster/glusterfs-3.12
+	docker exec $container apt update
+	echo "installing gfapi"
+    packages="glusterfs gcc"
 	docker exec $container yum install -y $packages
 fi
 
@@ -49,6 +59,6 @@ docker exec $container /root/.cargo/bin/cargo build --release --all
 
 echo "Release directory"
 ls $path/target/release/
-docker exec $container mv target/release/gluster-flexvol target/release-gluster-flexvol-$distro
+docker exec $container mv target/release/gluster-flexvol target/release/gluster-flexvol-$distro
 
 finish
