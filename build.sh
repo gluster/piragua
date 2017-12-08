@@ -13,6 +13,7 @@ container="gluster-flexvol-build-$RANDOM"
 
 function finish {
     echo "Cleaning up: ($?)!"
+    docker kill $container
     docker rm $container
     echo "finished cleaning up"
 }
@@ -48,6 +49,6 @@ docker exec $container /root/.cargo/bin/cargo build --release --all
 
 echo "Release directory"
 ls $path/target/release/
-mv $path/target/release/gluster-flexvol $path/target/release/gluster-flexvol-$distro
+docker exec $container mv target/release/gluster-flexvol target/release-gluster-flexvol-$distro
 
 finish
