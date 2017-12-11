@@ -4,7 +4,6 @@
 extern crate base64;
 #[macro_use]
 extern crate clap;
-//extern crate frank_jwt;
 extern crate gfapi_sys;
 extern crate gluster;
 extern crate itertools;
