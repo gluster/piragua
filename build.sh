@@ -35,8 +35,13 @@ then
   echo "Usage $0 -d (centos|ubuntu) -p /path/to/build"
   exit -1
 fi
+
+if [ ! -d "${path}" ]
+then
+  echo "path ${path} does not exist or is not a directory.  Exiting"
+  exit -1
+fi
  
-  
 set -euo pipefail
 
 echo "About to launch ${distro} container"
