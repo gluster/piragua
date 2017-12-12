@@ -57,14 +57,13 @@ then
    trap finish EXIT
 fi
 
-echo "Launching ${container} with args -d -i -t -v ${path}:/build/z -w /build ${distro}"
 
-docker run --name ${container} -d -i -t -v ${path}:/build:z -w /build ${distro}
-
-echo "Installing deps"
 
 case "$distro" in 
    centos*)
+        echo "Launching ${container} with args -d -i -t -v ${path}:/build/z -w /build ${distro}"
+        docker run --name ${container} -d -i -t -v ${path}:/build:z -w /build ${distro}
+        echo "Installing deps"
 	docker exec ${container} yum update -y
 	echo "installing centos-release-gluster"
 	docker exec ${container} yum install -y centos-release-gluster openssl-devel.x86_64
@@ -73,6 +72,9 @@ case "$distro" in
 	docker exec ${container} yum install -y ${packages}
         ;;
    ubuntu*)
+        echo "Launching ${container} with args -d -i -t -v ${path}:/build/z -w /build ${distro}"
+        docker run --name ${container} -d -i -t -v ${path}:/build:z -w /build ${distro}
+        echo "Installing deps"
 	docker exec ${container} apt update
 	echo "installing gluster"
         docker exec ${container} add-apt-repository ppa:gluster/glusterfs-3.12
