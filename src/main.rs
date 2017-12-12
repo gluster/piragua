@@ -259,7 +259,7 @@ impl<'a, 'r> FromRequest<'a, 'r> for Jwt {
 
 
 #[post("/clusters", format = "application/json")]
-fn create_cluster(web_token: Jwt) -> Created<Json<GlusterClusters>> {
+fn create_cluster(_web_token: Jwt) -> Created<Json<GlusterClusters>> {
     let clusters = GlusterClusters {
         id: "cluster-test".to_string(),
         nodes: vec![],
@@ -271,7 +271,7 @@ fn create_cluster(web_token: Jwt) -> Created<Json<GlusterClusters>> {
 
 #[get("/clusters/<cluster_id>")]
 fn get_cluster_info(
-    web_token: Jwt,
+    _web_token: Jwt,
     cluster_id: String,
     state: State<Gluster>,
 ) -> Result<Json<GlusterClusters>, String> {
@@ -310,7 +310,7 @@ fn get_cluster_info(
 }
 
 #[get("/clusters")]
-fn list_clusters(web_token: Jwt, state: State<String>) -> Json<ClusterList> {
+fn list_clusters(_web_token: Jwt, state: State<String>) -> Json<ClusterList> {
     // Only return the single volume as a cluster
     let clusters = ClusterList { clusters: vec![state.inner().clone()] };
     println!(
@@ -320,13 +320,13 @@ fn list_clusters(web_token: Jwt, state: State<String>) -> Json<ClusterList> {
     Json(clusters)
 }
 
-#[delete("/clusters/<id>")]
-fn delete_cluster(web_token: Jwt, id: String) {
+#[delete("/clusters/<_id>")]
+fn delete_cluster(_web_token: Jwt, _id: String) {
     //json!({ "status": "ok" })
 }
 
 #[get("/nodes/<id>")]
-fn get_node_info(web_token: Jwt, id: String) -> Result<Json<NodeInfoResponse>, String> {
+fn get_node_info(_web_token: Jwt, id: String) -> Result<Json<NodeInfoResponse>, String> {
     // heketi thinks this is a mgmt node
     // get info on 192.168.1.2
     let node_uuid = Uuid::from_str(&id).map_err(|e| e.to_string())?;
@@ -375,40 +375,40 @@ fn get_node_info(web_token: Jwt, id: String) -> Result<Json<NodeInfoResponse>, S
     Ok(Json(resp))
 }
 
-#[delete("/nodes/<id>")]
-fn delete_node<'a>(web_token: Jwt, id: String) -> Result<Response<'a>, String> {
+#[delete("/nodes/<_id>")]
+fn delete_node<'a>(_web_token: Jwt, _id: String) -> Result<Response<'a>, String> {
     //NOPE you're not allowed
     let mut response = Response::new();
     response.set_status(Status::new(204, "Volume created"));
     Ok(response)
 }
 
-#[post("/nodes", format = "application/json", data = "<input>")]
-fn add_node<'a>(web_token: Jwt, input: Json<AddNodeRequest>) -> Result<Response<'a>, String> {
+#[post("/nodes", format = "application/json", data = "<_input>")]
+fn add_node<'a>(_web_token: Jwt, _input: Json<AddNodeRequest>) -> Result<Response<'a>, String> {
     //NOPE you're not allowed
     let mut response = Response::new();
     response.set_status(Status::new(204, "Node created"));
     Ok(response)
 }
 
-#[post("/devices", format = "application/json", data = "<input>")]
-fn add_device<'a>(web_token: Jwt, input: Json<AddDeviceRequest>) -> Result<Response<'a>, String> {
+#[post("/devices", format = "application/json", data = "<_input>")]
+fn add_device<'a>(_web_token: Jwt, _input: Json<AddDeviceRequest>) -> Result<Response<'a>, String> {
     //NOPE you're not allowed
     let mut response = Response::new();
     response.set_status(Status::new(204, "Device created"));
     Ok(response)
 }
 
-#[delete("/devices/<id>")]
-fn delete_device<'a>(web_token: Jwt, id: String) -> Result<Response<'a>, String> {
+#[delete("/devices/<_id>")]
+fn delete_device<'a>(_web_token: Jwt, _id: String) -> Result<Response<'a>, String> {
     //NOPE you're not allowed
     let mut response = Response::new();
     response.set_status(Status::new(204, "Device deleted"));
     Ok(response)
 }
 
-#[get("/devices/<device_id>")]
-fn get_device_info(web_token: Jwt, device_id: String) -> Json<DeviceInfo> {
+#[get("/devices/<_device_id>")]
+fn get_device_info(_web_token: Jwt, _device_id: String) -> Json<DeviceInfo> {
     let device_info = DeviceInfo {
         name: PathBuf::from("/dev/sda"), //": "/dev/sdh",
         storage: Storage {
@@ -424,7 +424,7 @@ fn get_device_info(web_token: Jwt, device_id: String) -> Json<DeviceInfo> {
 
 #[post("/volumes", format = "application/json", data = "<input>")]
 fn create_volume<'a>(
-    web_token: Jwt,
+    _web_token: Jwt,
     input: Json<CreateVolumeRequest>,
     state: State<Gluster>,
     vol_name: State<String>,
@@ -538,7 +538,7 @@ fn get_gluster_vol(vol_id: &str) -> IOResult<HashMap<String, String>> {
 
 #[get("/volumes/<vol_id>")]
 fn get_volume_info<'a>(
-    web_token: Jwt,
+    _web_token: Jwt,
     vol_id: String,
     vol_name: State<String>,
 ) -> Result<Response<'a>, String> {
@@ -611,7 +611,7 @@ fn get_volume_info<'a>(
 
 #[post("/volumes/<vol_name>/<id>/expand", format = "application/json", data = "<input>")]
 fn expand_volume<'a>(
-    web_token: Jwt,
+    _web_token: Jwt,
     vol_name: String,
     id: String,
     input: Json<ExpandVolumeRequest>,
@@ -633,10 +633,10 @@ fn expand_volume<'a>(
     Ok(response)
 }
 
-#[delete("/volumes/<vol_name>/<vol_id>")]
+#[delete("/volumes/<_vol_name>/<vol_id>")]
 fn delete_volume<'a>(
-    web_token: Jwt,
-    vol_name: String,
+    _web_token: Jwt,
+    _vol_name: String,
     vol_id: String,
     state: State<Gluster>,
 ) -> Result<Response<'a>, String> {
@@ -659,7 +659,7 @@ fn delete_volume<'a>(
 }
 
 #[get("/volumes")]
-fn list_volumes(web_token: Jwt, state: State<Gluster>) -> Result<Json<VolumeList>, String> {
+fn list_volumes(_web_token: Jwt, state: State<Gluster>) -> Result<Json<VolumeList>, String> {
     let mut vol_list: Vec<String> = vec![];
     let d =
         GlusterDirectory { dir_handle: state.opendir(&Path::new("/")).map_err(|e| e.to_string())? };
