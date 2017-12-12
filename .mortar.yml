@@ -1,0 +1,22 @@
+language: "shell"
+sudo: "true"
+os: centos7x
+branches:
+  only:
+    - master
+script:
+  - curl https://sh.rustup.rs -o /root/rustup.sh
+  - chmod +x /root/rustup.sh
+  - echo "Installing nightly rust"
+  - /root/rustup.sh --default-toolchain nightly -y
+  - echo "Installing deps"
+  - yum update -y
+  - echo "installing centos-release-gluster"
+  - yum install -y centos-release-gluster openssl-devel.x86_64
+  - echo "installing gfapi"
+  - yum install -y glusterfs-api-devel glusterfs-api gcc
+  - echo "Building"
+  - /root/.cargo/bin/cargo build --release --all
+  - mv target/release/gluster-flexvol target/release/gluster-flexvol-${distro}
+  - echo "Release directory"
+  - ls ${path}/target/release/
