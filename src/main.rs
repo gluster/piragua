@@ -269,7 +269,7 @@ fn create_cluster(web_token: Jwt) -> Created<Json<GlusterClusters>> {
     Created("".to_string(), Some(Json(clusters)))
 }
 
-#[get("/clusters/<cluster_id>", format = "application/json")]
+#[get("/clusters/<cluster_id>")]
 fn get_cluster_info(
     web_token: Jwt,
     cluster_id: String,
@@ -320,12 +320,12 @@ fn list_clusters(web_token: Jwt, state: State<String>) -> Json<ClusterList> {
     Json(clusters)
 }
 
-#[delete("/clusters/<id>", format = "application/json")]
+#[delete("/clusters/<id>")]
 fn delete_cluster(web_token: Jwt, id: String) {
     //json!({ "status": "ok" })
 }
 
-#[get("/nodes/<id>", format = "application/json")]
+#[get("/nodes/<id>")]
 fn get_node_info(web_token: Jwt, id: String) -> Result<Json<NodeInfoResponse>, String> {
     // heketi thinks this is a mgmt node
     // get info on 192.168.1.2
@@ -375,7 +375,7 @@ fn get_node_info(web_token: Jwt, id: String) -> Result<Json<NodeInfoResponse>, S
     Ok(Json(resp))
 }
 
-#[delete("/nodes/<id>", format = "application/json")]
+#[delete("/nodes/<id>")]
 fn delete_node<'a>(web_token: Jwt, id: String) -> Result<Response<'a>, String> {
     //NOPE you're not allowed
     let mut response = Response::new();
@@ -399,7 +399,7 @@ fn add_device<'a>(web_token: Jwt, input: Json<AddDeviceRequest>) -> Result<Respo
     Ok(response)
 }
 
-#[delete("/devices/<id>", format = "application/json")]
+#[delete("/devices/<id>")]
 fn delete_device<'a>(web_token: Jwt, id: String) -> Result<Response<'a>, String> {
     //NOPE you're not allowed
     let mut response = Response::new();
@@ -407,7 +407,7 @@ fn delete_device<'a>(web_token: Jwt, id: String) -> Result<Response<'a>, String>
     Ok(response)
 }
 
-#[get("/devices/<device_id>", format = "application/json")]
+#[get("/devices/<device_id>")]
 fn get_device_info(web_token: Jwt, device_id: String) -> Json<DeviceInfo> {
     let device_info = DeviceInfo {
         name: PathBuf::from("/dev/sda"), //": "/dev/sdh",
@@ -536,7 +536,7 @@ fn get_gluster_vol(vol_id: &str) -> IOResult<HashMap<String, String>> {
     Ok(vol_data)
 }
 
-#[get("/volumes/<vol_id>", format = "application/json")]
+#[get("/volumes/<vol_id>")]
 fn get_volume_info<'a>(
     web_token: Jwt,
     vol_id: String,
@@ -658,7 +658,7 @@ fn delete_volume<'a>(
     Ok(response)
 }
 
-#[get("/volumes", format = "application/json")]
+#[get("/volumes")]
 fn list_volumes(web_token: Jwt, state: State<Gluster>) -> Result<Json<VolumeList>, String> {
     let mut vol_list: Vec<String> = vec![];
     let d =
