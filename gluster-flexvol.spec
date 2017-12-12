@@ -4,15 +4,14 @@ Release: 2%{?dist}
 Summary: Gluster Heketi service that provides directories as volumes.
 
 License: Apache2
-URL: https://github.comcast.com/cholco202/gluster_flexvol
-Source0: https://github.comcast.com/cholco202/gluster_flexvol/archive/%{name}-%{version}.tar.gz
+URL: https://github.comcast.com/cloud-services/gluster_flexvol
+Source0: https://github.comcast.com/cloud-services/gluster_flexvol/archive/%{name}-%{version}.tar.gz
 
 %define debug_package %{nil}
 
 %{?systemd_requires}
 BuildRequires: systemd
 
-BuildRequires: docker
 Requires: glusterfs-api
 
 %description
@@ -20,9 +19,6 @@ Gluster Heketi service that provides directories as volumes.
 
 %prep
 %setup -q
-
-%build
-./build.sh -d centos -p $RPM_BUILD_DIR/%{name}-%{version}
 
 %install
 rm -rf $RPM_BUILD_ROOT

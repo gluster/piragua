@@ -5,6 +5,7 @@ branches:
   only:
     - master
 script:
+  - P=$(pwd)
   - curl https://sh.rustup.rs -o rustup.sh
   - chmod +x rustup.sh
   - echo "Installing nightly rust"
@@ -17,7 +18,12 @@ script:
   - sudo yum install -y glusterfs-api-devel glusterfs-api gcc rpm-build
   - echo "Building"
   - ~/.cargo/bin/cargo build --release --all
-  - mv target/release/gluster-flexvol target/release/gluster-flexvol-centos
-  - echo "Release directory"
-  - ls target/release/
-  - mkdir -p rpmbuild/SOURCES
+  - sudo mkdir /gluster-flexvol-0.1
+  - cd /
+  - sudo tar -czvvpf gluster-flexvol-0.1.tar.gz $P/src $P/Cargo.toml $P/Cargo.lock $P/systemd $P/tests $P/target/release/gluster-flexvol
+  - sudo mkdir -p /root/rpmbuild/SOURCES
+  - sudo cp gluster-flexvol-0.1.tar.gz /root/rpmbuild/SOURCES/
+  - cd $P
+  - echo "Building rpm"
+  - sudo rpmbuild -bb gluster-flexvol.spec
+  - ls /root/rpmbuild/RPMS/x86_64/
