@@ -309,7 +309,7 @@ fn get_cluster_info(
     Ok(Json(clusters))
 }
 
-#[get("/clusters", format = "application/json")]
+#[get("/clusters")]
 fn list_clusters(web_token: Jwt, state: State<String>) -> Json<ClusterList> {
     // Only return the single volume as a cluster
     let clusters = ClusterList { clusters: vec![state.inner().clone()] };
