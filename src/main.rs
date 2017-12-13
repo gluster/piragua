@@ -593,13 +593,7 @@ fn get_volume_info<'a>(
     let quota_info = quota_list(&vol_name).map_err(|e| e.to_string())?;
     let mut quota_size: u64 = 0;
     for quota in quota_info {
-        if quota.path ==
-            PathBuf::from(format!(
-                "{volume}/{path}",
-                volume = *vol_name,
-                path = &vol_id
-            ))
-        {
+        if quota.path == PathBuf::from(format!("/{path}", path = &vol_id)) {
             //This quota.limit is in bytes.  We need to convert to GB
             quota_size = quota.limit * 1024 * 1024 * 1024;
         }
@@ -609,7 +603,6 @@ fn get_volume_info<'a>(
         name: format!("{volume}/{path}", volume = *vol_name, path = &vol_id),
         id: vol_id.clone(),
         cluster: "cluster-test".into(),
-        // TODO: This should be changed to the quota size
         size: quota_size,
         durability: Durability {
             mount_type: Some(VolumeType::Replicate),
