@@ -11,8 +11,8 @@ The 3.12 release introduced deep mount support for fuse.
 ## Building
 * Run `cargo build --release` with a nightly version of rust to build
 * Alternatively you can run build.sh and build for a different OS version
-* Mortar is also automatically building this on every commit and 
-producing an rpm file which is then published to Atlas.
+* Mortar is also automatically building on every commit and producing 
+an rpm file which is then published to Atlas.
 
 ## Deploying
 * Install the deb/rpm package for this on all of the glusterfs servers 
