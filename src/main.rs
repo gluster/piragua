@@ -32,7 +32,7 @@ use clap::{Arg, App};
 use gfapi_sys::gluster::*;
 use gluster::get_local_ip;
 use gluster::peer::peer_list;
-use gluster::volume::volume_add_quota;
+use gluster::volume::{quota_list, volume_add_quota};
 use itertools::Itertools;
 use jsonwebtoken::{Algorithm, decode, Validation};
 use libc::{S_IRGRP, S_IWGRP, S_IXGRP, S_IRWXU, S_IRUSR, S_IXUSR};
@@ -581,13 +581,27 @@ fn get_volume_info<'a>(
         "backup-volfile-servers".into(),
         backup_servers.iter().join(",").to_string(),
     );
+    let quota_info = quota_list(&vol_name).map_err(|e| e.to_string())?;
+    let mut quota_size: u64 = 0;
+    for quota in quota_info {
+        if quota.path ==
+            PathBuf::from(format!(
+                "{volume}/{path}",
+                volume = *vol_name,
+                path = &vol_id
+            ))
+        {
+            //This quota.limit is in bytes.  We need to convert to GB
+            quota_size = quota.limit * 1024 * 1024 * 1024;
+        }
+    }
 
     let response_data = VolumeInfo {
         name: format!("{volume}/{path}", volume = *vol_name, path = &vol_id),
         id: vol_id.clone(),
         cluster: "cluster-test".into(),
         // TODO: This should be changed to the quota size
-        size: 10,
+        size: quota_size,
         durability: Durability {
             mount_type: Some(VolumeType::Replicate),
             replicate: Some(ReplicaDurability { replica: Some(3) }),
