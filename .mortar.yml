@@ -27,5 +27,5 @@ script:
   - sudo cp gluster-flexvol-0.${GIT_COMMIT}.tar.gz /root/rpmbuild/SOURCES/
   - cd $P
   - echo "Building rpm"
-  - sudo rpmbuild -bb gluster-flexvol.spec
+  - sudo rpmbuild --define "_builddir $(pwd)" -bb gluster-flexvol.spec
   - ls /root/rpmbuild/RPMS/x86_64/
