@@ -4,8 +4,9 @@ os: centos7x
 branches:
   only:
     - master
-collect:
-  artifacts: "/root/rpmbuild/RPMS/x86_64/*.rpm"
+jenkins:
+  collect:
+    artifacts: "/root/rpmbuild/RPMS/x86_64/*.rpm"
 script:
   - P=$(pwd)
   - curl https://sh.rustup.rs -o rustup.sh
