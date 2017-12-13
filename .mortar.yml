@@ -17,5 +17,6 @@ script:
   - sudo yum install -y glusterfs-api-devel glusterfs-api gcc rpm-build
   - ~/.cargo/bin/cargo build --release --all
   - sudo rpmbuild --define "_builddir ${P}" -bb gluster-flexvol.spec
-  - sudo cp /root/rpmbuild/RPMS/x86_64/*.rpm $P
+  - sudo ls /root/rpmbuild/RPMS/x86_64/
+  - sudo sh -c "cp /root/rpmbuild/RPMS/x86_64/* ${P}"
   - sudo chown jenkins *.rpm
