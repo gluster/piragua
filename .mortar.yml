@@ -18,14 +18,6 @@ script:
   - sudo yum install -y glusterfs-api-devel glusterfs-api gcc rpm-build
   - echo "Building"
   - ~/.cargo/bin/cargo build --release --all
-  - TAR_PATH=/gluster-flexvol.0.${GIT_COMMIT}
-  - sudo mkdir ${TAR_PATH}
-  - cp -R $P/* ${TAR_PATH}
-  - cd /
-  - sudo tar -czvvpf gluster-flexvol-0.${GIT_COMMIT}.tar.gz ${TAR_PATH}/src ${TAR_PATH}/Cargo.toml ${TAR_PATH}/Cargo.lock $/systemd ${TAR_PATH}/tests ${TAR_PATH}/target/release/gluster-flexvol
-  - sudo mkdir -p /root/rpmbuild/SOURCES
-  - sudo cp gluster-flexvol-0.${GIT_COMMIT}.tar.gz /root/rpmbuild/SOURCES/
-  - cd $P
   - echo "Building rpm"
-  - sudo rpmbuild --define "_builddir $(pwd)" -bb gluster-flexvol.spec
+  - sudo rpmbuild --define "_builddir ${P}" -bb gluster-flexvol.spec
   - ls /root/rpmbuild/RPMS/x86_64/
