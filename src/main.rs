@@ -206,6 +206,11 @@ struct Claims {
     qsh: String,
 }
 
+#[derive(Debug, Serialize)]
+struct Version {
+    version: String,
+}
+
 // Json Web Token
 struct Jwt(Claims);
 
@@ -685,6 +690,20 @@ fn list_volumes(_web_token: Jwt, state: State<Gluster>) -> Result<Json<VolumeLis
     Ok(Json(volumes))
 }
 
+#[get("/version")]
+fn get_version() -> Result<Json<Version>, String> {
+    match env::var("VERSION") {
+        Ok(vers) => {
+            let v = Version { version: vers };
+            Ok(Json(v))
+        }
+        Err(e) => Err(format!(
+            "Unable to find VERSION env variable: {}",
+            e.to_string()
+        )),
+    }
+}
+
 #[error(500)]
 fn internal_error() -> &'static str {
     "Whoops! Looks like we messed up."
@@ -700,6 +719,7 @@ fn rocket() -> rocket::Rocket {
         .mount(
             "/",
             routes![
+                get_version,
                 get_cluster_info,
                 create_cluster,
                 list_clusters,
