@@ -595,7 +595,7 @@ fn get_volume_info<'a>(
     for quota in quota_info {
         if quota.path == PathBuf::from(format!("/{path}", path = &vol_id)) {
             //This quota.limit is in bytes.  We need to convert to GB
-            quota_size = quota.limit * 1024 * 1024 * 1024;
+            quota_size = quota.limit / 1024 / 1024 / 1024;
         }
     }
 
