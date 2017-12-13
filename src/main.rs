@@ -81,7 +81,7 @@ struct CreateVolumeRequest {
     /// will be vol_{id}
     name: String,
     durability: Option<Durability>,
-    gid: u64,
+    gid: Option<u64>,
     snapshot: Snapshot,
 }
 
@@ -443,11 +443,20 @@ fn create_volume<'a>(
     if !state.exists(&dir_path).map_err(|e| e.to_string())? {
         state.mkdir(&dir_path, S_IRWXU).map_err(|e| e.to_string())?;
     }
-    // Change the group id on it to match the requested on
+
+    // Change the group id on it to match the requested one
     // root and the requesting user can read the directory
-    state.chown(&dir_path, 0, input.gid as u32).map_err(
-        |e| e.to_string(),
-    )?;
+    // If gid is None we don't do anything.
+    match input.gid {
+        Some(gid) => {
+            state.chown(&dir_path, 0, gid as u32).map_err(
+                |e| e.to_string(),
+            )?;
+        }
+        None => {
+            //Skip chown
+        }
+    };
 
     // root can read/execute and requesting user can read/write/execute
     state
