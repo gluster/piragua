@@ -440,6 +440,15 @@ fn create_volume<'a>(
         let u = Uuid::new_v4();
         u.hyphenated().to_string()
     } else {
+        if input.name.chars().any(
+            |c| !(c.is_alphabetic() || c.is_numeric()),
+        )
+        {
+            println!("Invalid characters detected in name");
+            return Err(
+                "Only numbers and letters are allowed in the volume name".into(),
+            );
+        }
         input.name.clone()
     };
     let dir_path = Path::new(&vol_id);
@@ -584,13 +593,7 @@ fn get_volume_info<'a>(
     let quota_info = quota_list(&vol_name).map_err(|e| e.to_string())?;
     let mut quota_size: u64 = 0;
     for quota in quota_info {
-        if quota.path ==
-            PathBuf::from(format!(
-                "{volume}/{path}",
-                volume = *vol_name,
-                path = &vol_id
-            ))
-        {
+        if quota.path == PathBuf::from(format!("/{path}", path = &vol_id)) {
             //This quota.limit is in bytes.  We need to convert to GB
             quota_size = quota.limit * 1024 * 1024 * 1024;
         }
@@ -600,7 +603,6 @@ fn get_volume_info<'a>(
         name: format!("{volume}/{path}", volume = *vol_name, path = &vol_id),
         id: vol_id.clone(),
         cluster: "cluster-test".into(),
-        // TODO: This should be changed to the quota size
         size: quota_size,
         durability: Durability {
             mount_type: Some(VolumeType::Replicate),
@@ -686,6 +688,30 @@ fn delete_volume<'a>(
     Ok(response)
 }
 
+#[delete("/volumes/<vol_id>")]
+fn delete_volume_fallback<'a>(
+    _web_token: Jwt,
+    vol_id: String,
+    state: State<Gluster>,
+) -> Result<Response<'a>, String> {
+    // Clients will keep calling this and we need to return 204 when it's finished
+    // This works out well because rm -rf could take awhile.
+    let mut response = Response::new();
+    response.set_status(Status::Accepted);
+    response.set_header(Location(format!("/volumes/{}", vol_id)));
+
+    // Split this into the volume_name/volume_id and just delete the volume_id
+    println!("Deleting {}", vol_id);
+
+    // Delete the directory.
+    // TODO: How can we background this and tell the client to come back later?
+    state.remove_dir_all(&Path::new(&vol_id)).map_err(
+        |e| e.to_string(),
+    )?;
+
+    Ok(response)
+}
+
 #[get("/volumes")]
 fn list_volumes(_web_token: Jwt, state: State<Gluster>) -> Result<Json<VolumeList>, String> {
     let mut vol_list: Vec<String> = vec![];
@@ -735,6 +761,7 @@ fn rocket() -> rocket::Rocket {
                 create_volume,
                 expand_volume,
                 delete_volume,
+                delete_volume_fallback,
                 get_node_info,
                 add_node,
                 delete_node,
