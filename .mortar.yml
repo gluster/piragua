@@ -6,7 +6,7 @@ branches:
     - master
 jenkins:
   collect:
-    artifacts: "/root/rpmbuild/RPMS/x86_64/*.rpm"
+    artifacts: "*.rpm"
 script:
   - P=$(pwd)
   - curl https://sh.rustup.rs -o rustup.sh
@@ -17,3 +17,5 @@ script:
   - sudo yum install -y glusterfs-api-devel glusterfs-api gcc rpm-build
   - ~/.cargo/bin/cargo build --release --all
   - sudo rpmbuild --define "_builddir ${P}" -bb gluster-flexvol.spec
+  - sudo cp /root/rpmbuild/RPMS/x86_64/*.rpm $P
+  - sudo chown jenkins *.rpm
