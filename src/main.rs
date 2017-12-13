@@ -691,17 +691,9 @@ fn list_volumes(_web_token: Jwt, state: State<Gluster>) -> Result<Json<VolumeLis
 }
 
 #[get("/version")]
-fn get_version() -> Result<Json<Version>, String> {
-    match env::var("VERSION") {
-        Ok(vers) => {
-            let v = Version { version: vers };
-            Ok(Json(v))
-        }
-        Err(e) => Err(format!(
-            "Unable to find VERSION env variable: {}",
-            e.to_string()
-        )),
-    }
+fn get_version() -> Json<Version> {
+    let v = Version { version: crate_version!().to_string() };
+    Json(v)
 }
 
 #[error(500)]
