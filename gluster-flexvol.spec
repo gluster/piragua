@@ -25,7 +25,7 @@ rm -rf $RPM_BUILD_ROOT
 mkdir $RPM_BUILD_ROOT
 mkdir -p $RPM_BUILD_ROOT/usr/sbin $RPM_BUILD_ROOT/etc/gluster-flexvol $RPM_BUILD_ROOT/lib/systemd/system
 
-cp $RPM_BUILD_DIR/target/release/gluster-flexvol-centos $RPM_BUILD_ROOT/usr/sbin/gluster-flexvol
+cp $RPM_BUILD_DIR/target/release/gluster-flexvol $RPM_BUILD_ROOT/usr/sbin/gluster-flexvol
 cp $RPM_BUILD_DIR/systemd/gluster-flexvol.service $RPM_BUILD_ROOT/lib/systemd/system
 cp $RPM_BUILD_DIR/systemd/environment $RPM_BUILD_ROOT/etc/gluster-flexvol/
 
