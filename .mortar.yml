@@ -5,7 +5,7 @@ branches:
   only:
     - master
 collect:
-  artifacts: "/root/rpmbuild/RPMS/x86_64/*.rpm "
+  artifacts: "/root/rpmbuild/RPMS/x86_64/*.rpm"
 script:
   - P=$(pwd)
   - curl https://sh.rustup.rs -o rustup.sh
