@@ -441,7 +441,7 @@ fn create_volume<'a>(
         u.hyphenated().to_string()
     } else {
         if input.name.chars().any(
-            |c| !c.is_alphabetic() || !c.is_numeric(),
+            |c| !(c.is_alphabetic() || c.is_numeric()),
         )
         {
             println!("Invalid characters detected in name");
