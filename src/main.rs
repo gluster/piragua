@@ -697,19 +697,24 @@ fn expand_volume<'a>(
     Ok(response)
 }
 
-#[delete("/volumes/<_vol_name>/<id>/<_name>")]
+#[delete("/volumes/<vol_name>/<id>/<name>")]
 fn delete_volume<'a>(
     _web_token: Jwt,
-    _vol_name: String,
+    vol_name: String,
     id: String,
-    _name: String,
+    name: String,
     state: State<Gluster>,
 ) -> Result<Response<'a>, String> {
     // Clients will keep calling this and we need to return 204 when it's finished
     // This works out well because rm -rf could take awhile.
     let mut response = Response::new();
     response.set_status(Status::Accepted);
-    response.set_header(Location(format!("/volumes/{}", id)));
+    response.set_header(Location(format!(
+        "/volumes/{volume}/{id}/{name}",
+        volume = vol_name,
+        id = id,
+        name = name
+    )));
 
     // Split this into the volume_name/volume_id and just delete the volume_id
     println!("Deleting {}", id);
