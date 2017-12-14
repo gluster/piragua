@@ -732,13 +732,37 @@ fn delete_volume<'a>(
 fn delete_volume_fallback<'a>(
     _web_token: Jwt,
     vol_id: String,
+    vol_name: State<String>,
     state: State<Gluster>,
 ) -> Result<Response<'a>, String> {
     // Clients will keep calling this and we need to return 204 when it's finished
     // This works out well because rm -rf could take awhile.
+
+    // Open the top level dir and find the nested dir_name for the client to later query
+    // There should only be 1 dir in this top level dir
+    let mut d = GlusterDirectory {
+        dir_handle: state.opendir(&Path::new(&vol_id)).map_err(
+            |e| e.to_string(),
+        )?,
+    };
+    let name = match d.next() {
+        Some(n) => n,
+        None => {
+            return Err(format!(
+                "Unable to find subdirectory for volume id {}",
+                vol_id
+            ));
+        }
+    };
+
     let mut response = Response::new();
     response.set_status(Status::Accepted);
-    response.set_header(Location(format!("/volumes/{}", vol_id)));
+    response.set_header(Location(format!(
+        "/volumes/{volume}/{id}/{name}",
+        volume = *vol_name,
+        id = vol_id,
+        name = name.path.file_name().unwrap().to_string_lossy(),
+    )));
 
     // Split this into the volume_name/volume_id and just delete the volume_id
     println!("Deleting {}", vol_id);
