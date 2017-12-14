@@ -754,6 +754,7 @@ fn delete_volume_fallback<'a>(
             ));
         }
     };
+    println!("delete subdir: {:?}", name);
 
     let mut response = Response::new();
     response.set_status(Status::Accepted);
