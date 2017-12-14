@@ -35,7 +35,7 @@ use gluster::peer::peer_list;
 use gluster::volume::{quota_list, volume_add_quota};
 use itertools::Itertools;
 use jsonwebtoken::{Algorithm, decode, Validation};
-use libc::{S_IRGRP, S_IWGRP, S_IXGRP, S_IRWXU, S_IRUSR, S_IXUSR};
+use libc::{DT_DIR, S_IRGRP, S_IWGRP, S_IXGRP, S_IRWXU, S_IRUSR, S_IXUSR};
 use rocket_contrib::Json;
 use rocket::{Outcome, Request, Response, State};
 use rocket::http::{ContentType, Status};
@@ -740,21 +740,24 @@ fn delete_volume_fallback<'a>(
 
     // Open the top level dir and find the nested dir_name for the client to later query
     // There should only be 1 dir in this top level dir
-    let mut d = GlusterDirectory {
+    let d = GlusterDirectory {
         dir_handle: state.opendir(&Path::new(&vol_id)).map_err(
             |e| e.to_string(),
         )?,
     };
-    let name = match d.next() {
-        Some(n) => n,
-        None => {
-            return Err(format!(
-                "Unable to find subdirectory for volume id {}",
-                vol_id
-            ));
+    let this = Path::new(".");
+    let parent = Path::new("..");
+    let mut subdir_name = String::new();
+    for dir_entry in d {
+        if dir_entry.path == this || dir_entry.path == parent {
+            continue;
         }
-    };
-    println!("delete subdir: {:?}", name);
+        match dir_entry.file_type {
+            DT_DIR => subdir_name = format!("{}", dir_entry.path.display()),
+            _ => {}
+        }
+    }
+    println!("delete subdir: {:?}", subdir_name);
 
     let mut response = Response::new();
     response.set_status(Status::Accepted);
@@ -762,7 +765,7 @@ fn delete_volume_fallback<'a>(
         "/volumes/{volume}/{id}/{name}",
         volume = *vol_name,
         id = vol_id,
-        name = name.path.file_name().unwrap().to_string_lossy(),
+        name = subdir_name,
     )));
 
     // Split this into the volume_name/volume_id and just delete the volume_id
