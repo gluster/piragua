@@ -583,7 +583,16 @@ fn get_volume_info<'a>(
     id: String,
     name: String,
     vol_name: State<String>,
+    state: State<Gluster>,
 ) -> Result<Response<'a>, String> {
+    let vol_exists = state.exists(&Path::new(&id)).map_err(|e| e.to_string())?;
+
+    if !vol_exists {
+        //Unable to find volume, returning NoContent
+        println!("volume {} doesn't exist.  Returning NoContent", id);
+        let response = Response::build().status(Status::NoContent).finalize();
+        return Ok(response);
+    }
     let vol_info = get_gluster_vol(&vol_name).map_err(|e| e.to_string())?;
     let peers = peer_list().map_err(|e| e.to_string())?;
 
@@ -773,9 +782,9 @@ fn delete_volume_fallback<'a>(
 
     // Delete the directory.
     // TODO: How can we background this and tell the client to come back later?
-    if let Err(e) = state.remove_dir_all(&Path::new(&vol_id)) {
-        println!("remove_dir_all failed: {:?}", e);
-    }
+    state.remove_dir_all(&Path::new(&vol_id)).map_err(
+        |e| e.to_string(),
+    )?;
 
     Ok(response)
 }

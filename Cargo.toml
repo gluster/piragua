@@ -1,6 +1,6 @@
 [package]
 name = "gluster-flexvol"
-version = "0.1.9"
+version = "0.1.10"
 authors = ["Chris Holcombe <xfactor973@gmail.com>"]
 license = "apache2"
 
