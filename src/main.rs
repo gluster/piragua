@@ -773,9 +773,9 @@ fn delete_volume_fallback<'a>(
 
     // Delete the directory.
     // TODO: How can we background this and tell the client to come back later?
-    state.remove_dir_all(&Path::new(&vol_id)).map_err(
-        |e| e.to_string(),
-    )?;
+    if let Err(e) = state.remove_dir_all(&Path::new(&vol_id)) {
+        println!("remove_dir_all failed: {:?}", e);
+    }
 
     Ok(response)
 }
