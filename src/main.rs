@@ -436,9 +436,9 @@ fn create_volume<'a>(
 ) -> Result<Response<'a>, String> {
     println!("volume request: {:#?}", input);
 
-    let vol_id = if input.name == "" {
-        let u = Uuid::new_v4();
-        u.hyphenated().to_string()
+    let id = Uuid::new_v4().hyphenated().to_string();
+    let name = if input.name == "" {
+        format!("vol_{}", id)
     } else {
         if input.name.chars().any(
             |c| !(c.is_alphabetic() || c.is_numeric()),
@@ -451,11 +451,16 @@ fn create_volume<'a>(
         }
         input.name.clone()
     };
-    let dir_path = Path::new(&vol_id);
+
+    let top_dir = Path::new(&id);
+    let sub_dir = PathBuf::from(format!("{}/{}", id, name));
 
     // Create the mount point on the cluster
-    if !state.exists(&dir_path).map_err(|e| e.to_string())? {
-        state.mkdir(&dir_path, S_IRWXU).map_err(|e| e.to_string())?;
+    if !state.exists(&top_dir).map_err(|e| e.to_string())? {
+        // Make the top level dir
+        state.mkdir(&top_dir, S_IRWXU).map_err(|e| e.to_string())?;
+        // Make the subdir
+        state.mkdir(&sub_dir, S_IRWXU).map_err(|e| e.to_string())?;
     }
 
     // Change the group id on it to match the requested one
@@ -463,7 +468,10 @@ fn create_volume<'a>(
     // If gid is None we don't do anything.
     match input.gid {
         Some(gid) => {
-            state.chown(&dir_path, 0, gid as u32).map_err(
+            state.chown(&top_dir, 0, gid as u32).map_err(
+                |e| e.to_string(),
+            )?;
+            state.chown(&sub_dir, 0, gid as u32).map_err(
                 |e| e.to_string(),
             )?;
         }
@@ -474,15 +482,19 @@ fn create_volume<'a>(
 
     // root can read/execute and requesting user can read/write/execute
     state
-        .chmod(&dir_path, S_IRUSR | S_IXUSR | S_IRGRP | S_IWGRP | S_IXGRP)
+        .chmod(&top_dir, S_IRUSR | S_IXUSR | S_IRGRP | S_IWGRP | S_IXGRP)
+        .map_err(|e| e.to_string())?;
+    state
+        .chmod(&sub_dir, S_IRUSR | S_IXUSR | S_IRGRP | S_IWGRP | S_IXGRP)
         .map_err(|e| e.to_string())?;
 
-    let quota_path = PathBuf::from(format!("/{}", vol_id));
+    let quota_path = PathBuf::from(format!("/{}", id));
     println!(
         "Adding {}GB sized quota to: {}",
         input.size,
         quota_path.display()
     );
+    // Convert input.size to bytes
     match volume_add_quota(&vol_name, &quota_path, input.size * 1024 * 1024 * 1024) {
         Ok(_) => {}
         Err(e) => {
@@ -491,7 +503,12 @@ fn create_volume<'a>(
     }
 
     let mut response = Response::new();
-    response.set_header(Location(format!("/volumes/{}", vol_id)));
+    response.set_header(Location(format!(
+        "/volumes/{volume}/{id}/{name}",
+        volume = *vol_name,
+        id = id,
+        name = name
+    )));
     response.set_status(Status::Accepted);
 
     Ok(response)
@@ -559,10 +576,12 @@ fn get_gluster_vol(vol_id: &str) -> IOResult<HashMap<String, String>> {
     Ok(vol_data)
 }
 
-#[get("/volumes/<vol_id>")]
+#[get("/volumes/<_volume>/<id>/<name>")]
 fn get_volume_info<'a>(
     _web_token: Jwt,
-    vol_id: String,
+    _volume: String,
+    id: String,
+    name: String,
     vol_name: State<String>,
 ) -> Result<Response<'a>, String> {
     let vol_info = get_gluster_vol(&vol_name).map_err(|e| e.to_string())?;
@@ -590,18 +609,31 @@ fn get_volume_info<'a>(
         "backup-volfile-servers".into(),
         backup_servers.iter().join(",").to_string(),
     );
-    let quota_info = quota_list(&vol_name).map_err(|e| e.to_string())?;
-    let mut quota_size: u64 = 0;
-    for quota in quota_info {
-        if quota.path == PathBuf::from(format!("/{path}", path = &vol_id)) {
-            //This quota.limit is in bytes.  We need to convert to GB
-            quota_size = quota.limit / 1024 / 1024 / 1024;
+    let quota_size: u64 = match quota_list(&vol_name) {
+        Ok(info) => {
+            let mut s: u64 = 0;
+            for quota in info {
+                if quota.path == PathBuf::from(format!("/{path}", path = &id)) {
+                    //This quota.limit is in bytes.  We need to convert to GB
+                    s = quota.limit / 1024 / 1024 / 1024
+                }
+            }
+            s
         }
-    }
+        Err(e) => {
+            println!("quota_list error for {}: {:?}", *vol_name, e);
+            0
+        }
+    };
 
     let response_data = VolumeInfo {
-        name: format!("{volume}/{path}", volume = *vol_name, path = &vol_id),
-        id: vol_id.clone(),
+        name: format!(
+            "{volume}/{id}/{name}",
+            volume = *vol_name,
+            id = id,
+            name = name
+        ),
+        id: id.clone(),
         cluster: "cluster-test".into(),
         size: quota_size,
         durability: Durability {
@@ -616,10 +648,11 @@ fn get_volume_info<'a>(
             glusterfs: GlusterFsMount {
                 hosts: backup_servers,
                 device: format!(
-                    "{server}:/{volume}/{path}",
+                    "{server}:/{volume}/{id}/{name}",
                     server = peers[0].hostname,
                     volume = *vol_name,
-                    path = vol_id
+                    id = id,
+                    name = name
                 ),
                 options: mount_options,
             },
@@ -639,16 +672,17 @@ fn get_volume_info<'a>(
     Ok(response)
 }
 
-#[post("/volumes/<vol_name>/<id>/expand", format = "application/json", data = "<input>")]
+#[post("/volumes/<vol_name>/<id>/<name>/expand", format = "application/json", data = "<input>")]
 fn expand_volume<'a>(
     _web_token: Jwt,
     vol_name: String,
     id: String,
+    name: String,
     input: Json<ExpandVolumeRequest>,
 ) -> Result<Response<'a>, String> {
 
     let mut response = Response::new();
-    response.set_header(Location(format!("/volumes/{}/{}", vol_name, id)));
+    response.set_header(Location(format!("/volumes/{}/{}/{}", vol_name, id, name)));
     response.set_status(Status::Accepted);
 
     // If this doesn't have a quota already it'll fail to remove
@@ -663,25 +697,31 @@ fn expand_volume<'a>(
     Ok(response)
 }
 
-#[delete("/volumes/<_vol_name>/<vol_id>")]
+#[delete("/volumes/<vol_name>/<id>/<name>")]
 fn delete_volume<'a>(
     _web_token: Jwt,
-    _vol_name: String,
-    vol_id: String,
+    vol_name: String,
+    id: String,
+    name: String,
     state: State<Gluster>,
 ) -> Result<Response<'a>, String> {
     // Clients will keep calling this and we need to return 204 when it's finished
     // This works out well because rm -rf could take awhile.
     let mut response = Response::new();
     response.set_status(Status::Accepted);
-    response.set_header(Location(format!("/volumes/{}", vol_id)));
+    response.set_header(Location(format!(
+        "/volumes/{volume}/{id}/{name}",
+        volume = vol_name,
+        id = id,
+        name = name
+    )));
 
     // Split this into the volume_name/volume_id and just delete the volume_id
-    println!("Deleting {}", vol_id);
+    println!("Deleting {}", id);
 
     // Delete the directory.
     // TODO: How can we background this and tell the client to come back later?
-    state.remove_dir_all(&Path::new(&vol_id)).map_err(
+    state.remove_dir_all(&Path::new(&id)).map_err(
         |e| e.to_string(),
     )?;
 
