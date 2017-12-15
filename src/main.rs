@@ -592,6 +592,92 @@ fn get_subdir_name(p: &Path, g: &Gluster) -> Result<Option<String>, String> {
     Ok(None)
 }
 
+#[get("/volumes/<id>")]
+fn get_volume_info_by_id<'a>(
+    _web_token: Jwt,
+    id: String,
+    vol_name: State<String>,
+    state: State<Gluster>,
+) -> Result<Response<'a>, String> {
+    let vol_exists = state.exists(&Path::new(&id)).map_err(|e| e.to_string())?;
+
+    if !vol_exists {
+        println!("volume {} doesn't exist.  Returning NoContent", id);
+        let response = Response::build().status(Status::NoContent).finalize();
+        return Ok(response);
+    }
+    let peers = peer_list().map_err(|e| e.to_string())?;
+    let backup_servers: Vec<String> = peers.iter().map(|ref p| p.hostname.clone()).collect();
+    let name = get_subdir_name(&Path::new(&id), &state)?;
+
+    let mut mount_options: HashMap<String, String> = HashMap::new();
+    mount_options.insert(
+        "backup-volfile-servers".into(),
+        backup_servers.iter().join(",").to_string(),
+    );
+    let quota_size: u64 = match quota_list(&vol_name) {
+        Ok(info) => {
+            let mut s: u64 = 0;
+            for quota in info {
+                if quota.path == PathBuf::from(format!("/{path}", path = &id)) {
+                    //This quota.limit is in bytes.  We need to convert to GB
+                    s = quota.limit / 1024 / 1024 / 1024
+                }
+            }
+            s
+        }
+        Err(e) => {
+            println!("quota_list error for {}: {:?}", *vol_name, e);
+            0
+        }
+    };
+
+    let response_data = VolumeInfo {
+        name: format!(
+            "{volume}/{id}/{name}",
+            volume = *vol_name,
+            id = id,
+            name = name.clone().unwrap_or("".into())
+        ),
+        id: id.clone(),
+        cluster: "cluster-test".into(),
+        size: quota_size,
+        durability: Durability {
+            mount_type: Some(VolumeType::Replicate),
+            replicate: Some(ReplicaDurability { replica: Some(3) }),
+        },
+        snapshot: Snapshot {
+            enable: Some(true),
+            factor: Some(1.20),
+        },
+        mount: Mount {
+            glusterfs: GlusterFsMount {
+                hosts: backup_servers,
+                device: format!(
+                    "{server}:/{volume}/{id}/{name}",
+                    server = peers[0].hostname,
+                    volume = *vol_name,
+                    id = id,
+                    name = name.unwrap_or("".into())
+                ),
+                options: mount_options,
+            },
+        },
+        bricks: vec![],
+    };
+    println!(
+        "VolumeInfo: {}",
+        serde_json::to_string(&response_data).unwrap()
+    );
+    let response = Response::build()
+        .header(ContentType::JSON)
+        .raw_header("X-Pending", "false")
+        .sized_body(Cursor::new(serde_json::to_string(&response_data).unwrap()))
+        .finalize();
+    println!("response: {:#?}", response);
+    Ok(response)
+}
+
 #[get("/volumes/<_volume>/<id>/<name>")]
 fn get_volume_info<'a>(
     _web_token: Jwt,
@@ -790,11 +876,7 @@ fn delete_volume_fallback<'a>(
 }
 
 #[get("/volumes")]
-fn list_volumes(
-    _web_token: Jwt,
-    vol_name: State<String>,
-    state: State<Gluster>,
-) -> Result<Json<VolumeList>, String> {
+fn list_volumes(_web_token: Jwt, state: State<Gluster>) -> Result<Json<VolumeList>, String> {
     let mut vol_list: Vec<String> = vec![];
     let d =
         GlusterDirectory { dir_handle: state.opendir(&Path::new("/")).map_err(|e| e.to_string())? };
@@ -808,12 +890,9 @@ fn list_volumes(
         match dir_entry.file_type {
             //Only append directories
             DT_DIR => {
-                let subdir_name = get_subdir_name(&dir_entry.path, &state)?;
                 vol_list.push(format!(
-                    "{volume}/{id}/{name}",
-                    volume = *vol_name,
-                    id = format!("{}", dir_entry.path.display()),
-                    name = subdir_name.unwrap_or("".into())
+                    "{}",
+                    format!("{}", dir_entry.path.display()),
                 ))
             }
             _ => {}
@@ -852,6 +931,7 @@ fn rocket() -> rocket::Rocket {
                 list_clusters,
                 delete_cluster,
                 get_volume_info,
+                get_volume_info_by_id,
                 list_volumes,
                 create_volume,
                 expand_volume,
