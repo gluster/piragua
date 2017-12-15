@@ -576,6 +576,22 @@ fn get_gluster_vol(vol_id: &str) -> IOResult<HashMap<String, String>> {
     Ok(vol_data)
 }
 
+fn get_subdir_name(p: &Path, g: &Gluster) -> Result<Option<String>, String> {
+    let this = Path::new(".");
+    let parent = Path::new("..");
+    let d = GlusterDirectory { dir_handle: g.opendir(p).map_err(|e| e.to_string())? };
+    for dir_entry in d {
+        if dir_entry.path == this || dir_entry.path == parent {
+            continue;
+        }
+        match dir_entry.file_type {
+            DT_DIR => return Ok(Some(format!("{}", dir_entry.path.display()))),
+            _ => {}
+        }
+    }
+    Ok(None)
+}
+
 #[get("/volumes/<_volume>/<id>/<name>")]
 fn get_volume_info<'a>(
     _web_token: Jwt,
@@ -749,23 +765,7 @@ fn delete_volume_fallback<'a>(
 
     // Open the top level dir and find the nested dir_name for the client to later query
     // There should only be 1 dir in this top level dir
-    let d = GlusterDirectory {
-        dir_handle: state.opendir(&Path::new(&vol_id)).map_err(
-            |e| e.to_string(),
-        )?,
-    };
-    let this = Path::new(".");
-    let parent = Path::new("..");
-    let mut subdir_name = String::new();
-    for dir_entry in d {
-        if dir_entry.path == this || dir_entry.path == parent {
-            continue;
-        }
-        match dir_entry.file_type {
-            DT_DIR => subdir_name = format!("{}", dir_entry.path.display()),
-            _ => {}
-        }
-    }
+    let subdir_name = get_subdir_name(&Path::new(&vol_id), &state)?;
     println!("delete subdir: {:?}", subdir_name);
 
     let mut response = Response::new();
@@ -774,7 +774,7 @@ fn delete_volume_fallback<'a>(
         "/volumes/{volume}/{id}/{name}",
         volume = *vol_name,
         id = vol_id,
-        name = subdir_name,
+        name = subdir_name.unwrap_or("".into()),
     )));
 
     // Split this into the volume_name/volume_id and just delete the volume_id
@@ -790,17 +790,34 @@ fn delete_volume_fallback<'a>(
 }
 
 #[get("/volumes")]
-fn list_volumes(_web_token: Jwt, state: State<Gluster>) -> Result<Json<VolumeList>, String> {
+fn list_volumes(
+    _web_token: Jwt,
+    vol_name: State<String>,
+    state: State<Gluster>,
+) -> Result<Json<VolumeList>, String> {
     let mut vol_list: Vec<String> = vec![];
     let d =
         GlusterDirectory { dir_handle: state.opendir(&Path::new("/")).map_err(|e| e.to_string())? };
+    let this = Path::new(".");
+    let parent = Path::new("..");
     for dir_entry in d {
-        let dir_name = format!("{}", dir_entry.path.display());
         // Skip the parent and current dir entries
-        if dir_name == ".." || dir_name == "." {
+        if dir_entry.path == this || dir_entry.path == parent {
             continue;
         }
-        vol_list.push(dir_name);
+        match dir_entry.file_type {
+            //Only append directories
+            DT_DIR => {
+                let subdir_name = get_subdir_name(&dir_entry.path, &state)?;
+                vol_list.push(format!(
+                    "{volume}/{id}/{name}",
+                    volume = *vol_name,
+                    id = format!("{}", dir_entry.path.display()),
+                    name = subdir_name.unwrap_or("".into())
+                ))
+            }
+            _ => {}
+        }
     }
     let volumes = VolumeList { volumes: vol_list };
 
