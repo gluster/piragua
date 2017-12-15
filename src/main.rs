@@ -820,6 +820,7 @@ fn list_volumes(
         }
     }
     let volumes = VolumeList { volumes: vol_list };
+    println!("volume list: {:?}", volumes);
 
     Ok(Json(volumes))
 }

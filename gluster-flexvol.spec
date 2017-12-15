@@ -1,6 +1,6 @@
 Name: gluster-flexvol
 Version: 0.1
-Release: 11%{?dist}
+Release: 12%{?dist}
 Summary: Gluster Heketi service that provides directories as volumes.
 
 License: Apache2
