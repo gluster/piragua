@@ -440,13 +440,10 @@ fn create_volume<'a>(
     let name = if input.name == "" {
         format!("vol_{}", id)
     } else {
-        if input.name.chars().any(
-            |c| !(c.is_alphabetic() || c.is_numeric()),
-        )
-        {
+        if input.name.chars().any(|c| invalid_chars(&c)) {
             println!("Invalid characters detected in name");
             return Err(
-                "Only numbers and letters are allowed in the volume name".into(),
+                "Only numbers, letters, '-' or '_' are allowed in the volume name".into(),
             );
         }
         input.name.clone()
@@ -590,6 +587,20 @@ fn get_subdir_name(p: &Path, g: &Gluster) -> Result<Option<String>, String> {
         }
     }
     Ok(None)
+}
+
+#[test]
+fn test_valid_chars() {
+    let vol_name = "it_works-0";
+    assert_eq!(vol_name.chars().any(|c| invalid_chars(&c)), false);
+
+    let vol_name = "it_fails!&";
+    assert_eq!(vol_name.chars().any(|c| invalid_chars(&c)), true);
+}
+
+// Returns true if this char is invalid
+fn invalid_chars(c: &char) -> bool {
+    !(c.is_alphabetic() || c.is_numeric() || c == &'-' || c == &'_')
 }
 
 #[get("/volumes/<id>")]
