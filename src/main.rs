@@ -375,7 +375,7 @@ fn get_node_info(_web_token: Jwt, id: String) -> Result<Json<NodeInfoResponse>, 
     };
     println!(
         "node info response: {}",
-        serde_json::to_string(&resp).unwrap()
+        serde_json::to_string(&resp).map_err(|e| e.to_string())?
     );
     Ok(Json(resp))
 }
@@ -678,12 +678,16 @@ fn get_volume_info_by_id<'a>(
     };
     println!(
         "VolumeInfo: {}",
-        serde_json::to_string(&response_data).unwrap()
+        serde_json::to_string(&response_data).map_err(
+            |e| e.to_string(),
+        )?
     );
     let response = Response::build()
         .header(ContentType::JSON)
         .raw_header("X-Pending", "false")
-        .sized_body(Cursor::new(serde_json::to_string(&response_data).unwrap()))
+        .sized_body(Cursor::new(serde_json::to_string(&response_data).map_err(
+            |e| e.to_string(),
+        )?))
         .finalize();
     println!("response: {:#?}", response);
     Ok(response)
@@ -783,12 +787,16 @@ fn get_volume_info<'a>(
     };
     println!(
         "VolumeInfo: {}",
-        serde_json::to_string(&response_data).unwrap()
+        serde_json::to_string(&response_data).map_err(
+            |e| e.to_string(),
+        )?
     );
     let response = Response::build()
         .header(ContentType::JSON)
         .raw_header("X-Pending", "false")
-        .sized_body(Cursor::new(serde_json::to_string(&response_data).unwrap()))
+        .sized_body(Cursor::new(serde_json::to_string(&response_data).map_err(
+            |e| e.to_string(),
+        )?))
         .finalize();
     println!("response: {:#?}", response);
     Ok(response)
