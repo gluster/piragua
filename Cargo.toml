@@ -1,13 +1,13 @@
 [package]
 name = "gluster-flexvol"
-version = "0.1.14"
+version = "0.1.15"
 authors = ["Chris Holcombe <xfactor973@gmail.com>"]
 license = "apache2"
 
 [dependencies]
 base64 = "*"
 clap = "*"
-gfapi-sys  = "~0.3" # gfapi
+gfapi-sys  = "~1.0" # gfapi
 gluster = "~0.8" # CLI library
 itertools = "*"
 libc = "*"
