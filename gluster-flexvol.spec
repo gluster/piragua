@@ -1,6 +1,6 @@
 Name: gluster-flexvol
 Version: 0.1
-Release: 14%{?dist}
+Release: 15%{?dist}
 Summary: Gluster Heketi service that provides directories as volumes.
 
 License: Apache2
@@ -17,7 +17,6 @@ Requires: glusterfs-api
 Gluster Heketi service that provides directories as volumes.
 
 %prep
-#%setup -q
 
 %install
 rm -rf $RPM_BUILD_ROOT
