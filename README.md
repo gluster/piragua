@@ -46,7 +46,7 @@ tree /mnt/glusterfs/ab1d8755-907d-44c3-9b32-0de2750c8e75/
 /mnt/glusterfs/ab1d8755-907d-44c3-9b32-0de2750c8e75/
 └── vol_ab1d8755-907d-44c3-9b32-0de2750c8e75
 ```
-That is a openshift volume.  It also has a quota attached to it:
+That is an openshift volume.  It also has a quota attached to it:
 ```
  gluster vol quota gv0 list
                   Path                   Hard-limit  Soft-limit      Used  Available  Soft-limit exceeded? Hard-limit exceeded?
