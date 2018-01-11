@@ -25,19 +25,21 @@ with openshift and kubernetes!
 
 ## High Level Overview
 ```
-+-----------+  Create Volume  +--------+  Create Volume  +---------+
-| Openshift +-----------------+ Heketi +-----------------+ Gluster |
-+-----------+                 +--------+                 +---------+
++-----------+  Create Volume +-------------+ Create Volume  +---------+
+| Openshift +----------------+ Rust Heketi | ---------------+ Gluster |
++-----------+                +-------------+                +---------+
 ```
-There's 3 components interacting in this.  There's the openshift server, the heketi service and gluster.  
-Heketi is a service that redhat created to manage gluster through a [rest](https://github.com/heketi/heketi/blob/master/doc/api/api.md) api.  The normal workflow is that openshift requests a volume to be created.  It makes a api call to 
+Clients using Openshift's container service occasionaly need persistent storage.  
+There's 3 components interacting in this.  There's the Openshift server, the Heketi service and Gluster.  
+- [Openshift](https://www.openshift.com/) is a container management platform that leverages [Kubernetes](https://kubernetes.io/).  It is a containers as a service platform.  
+- [Gluster](http://docs.gluster.org/en/latest/) is an open source distributed filesystem.
+- [Heketi](https://github.com/heketi/heketi) is a service that Redhat created to manage Gluster through a [rest](https://github.com/heketi/heketi/blob/master/doc/api/api.md) api.  
+
+The normal workflow is that Openshift requests a volume to be created.  It makes an api call to 
 Heketi and then Heketi turns around and requests that Gluster create a new volume.  The problem here is that 
 managing many Gluster volumes that are colocated on a single cluster can get very difficult.  What
-I have created here is a web server that mimics a minimal portion of the Heketi api to trick openshift
-into thinking it's talking to the real heketi api.  When a volume create call comes through this 
-new web server doesn't ask Gluster to create a volume.  It instead makes a top level directory on the cluster, adds
-a quota to it and returns that as the volume name.  This now means that thousands of openshift volumes can be colocated on the
-same Gluster easily.  The openshift service then uses Gluster's fuse module to deep mount the directory and
+I have created here is a web server that recreates a minimal portion of the Heketi api without using any Heketi code to trick Openshift into thinking it's talking to the real Heketi api.  When a volume create call comes through this 
+new web server doesn't ask Gluster to create a volume.  It instead asks Gluster to make a new top level directory on the cluster, adds a quota to it and returns that as the volume name.  This now means that thousands of Openshift volumes can be colocated on the same Gluster easily.  The Openshift service then uses Gluster's fuse module to deep mount the directory and
 nobody is the wiser from the client perspective.  
 
 On the Gluster server side you'll see something like this:
