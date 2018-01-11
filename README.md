@@ -39,3 +39,17 @@ new web server doesn't ask Gluster to create a volume.  It instead makes a top l
 a quota to it and returns that as the volume name.  This now means that thousands of openshift volumes can be colocated on the
 same Gluster easily.  The openshift service then uses Gluster's fuse module to deep mount the directory and
 nobody is the wiser from the client perspective.  
+
+On the Gluster server side you'll see something like this:
+```
+tree /mnt/glusterfs/ab1d8755-907d-44c3-9b32-0de2750c8e75/
+/mnt/glusterfs/ab1d8755-907d-44c3-9b32-0de2750c8e75/
+└── vol_ab1d8755-907d-44c3-9b32-0de2750c8e75
+```
+That is a openshift volume.  It also has a quota attached to it:
+```
+ gluster vol quota gv0 list
+                  Path                   Hard-limit  Soft-limit      Used  Available  Soft-limit exceeded? Hard-limit exceeded?
+-------------------------------------------------------------------------------------------------------------------------------
+/a08abef9-e4d2-499c-8b32-1b01ff855705      1.0GB     80%(819.2MB)  122.1MB 901.9MB              No  
+```
