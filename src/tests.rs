@@ -14,7 +14,6 @@ fn post_get_put_get() {
         .get("/clusters/test")
         .header(ContentType::JSON)
         .dispatch();
-    //    assert_eq!(res.status(), Status::NotFound);
 
     // Create a new cluster
     let mut f = File::open("tests/create_volume").unwrap();
