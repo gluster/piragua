@@ -32,7 +32,7 @@ use clap::{App, Arg};
 use gfapi_sys::gluster::*;
 use gluster::get_local_ip;
 use gluster::peer::peer_list;
-use gluster::volume::{quota_list, volume_add_quota};
+use gluster::volume::volume_add_quota;
 use itertools::Itertools;
 use jsonwebtoken::{decode, Algorithm, Validation};
 use libc::{DT_DIR, S_IRGRP, S_IRUSR, S_IRWXU, S_IWGRP, S_IXGRP, S_IXUSR};
@@ -618,19 +618,14 @@ fn get_volume_info_by_id<'a>(
         "backup-volfile-servers".into(),
         backup_servers.iter().join(",").to_string(),
     );
-    let quota_size: u64 = match quota_list(&vol_name) {
-        Ok(info) => {
-            let mut s: u64 = 0;
-            for quota in info {
-                if quota.path == PathBuf::from(format!("/{path}", path = &id)) {
-                    //This quota.limit is in bytes.  We need to convert to GB
-                    s = quota.limit / 1024 / 1024 / 1024
-                }
-            }
-            s
+    let quota_path = PathBuf::from(format!("/{}", id));
+    let quota_size: u64 = match state.statvfs(&quota_path) {
+        Ok(stat) => {
+            //This is in bytes.  We need to convert to GB
+            (stat.f_frsize * stat.f_blocks) / 1024 / 1024 / 1024
         }
         Err(e) => {
-            println!("quota_list error for {}: {:?}", *vol_name, e);
+            println!("statvfs error for {}: {:?}", *vol_name, e);
             0
         }
     };
@@ -724,19 +719,14 @@ fn get_volume_info<'a>(
         "backup-volfile-servers".into(),
         backup_servers.iter().join(",").to_string(),
     );
-    let quota_size: u64 = match quota_list(&vol_name) {
-        Ok(info) => {
-            let mut s: u64 = 0;
-            for quota in info {
-                if quota.path == PathBuf::from(format!("/{path}", path = &id)) {
-                    //This quota.limit is in bytes.  We need to convert to GB
-                    s = quota.limit / 1024 / 1024 / 1024
-                }
-            }
-            s
+    let quota_path = PathBuf::from(format!("/{}", id));
+    let quota_size: u64 = match state.statvfs(&quota_path) {
+        Ok(stat) => {
+            //This is in bytes.  We need to convert to GB
+            (stat.f_frsize * stat.f_blocks) / 1024 / 1024 / 1024
         }
         Err(e) => {
-            println!("quota_list error for {}: {:?}", *vol_name, e);
+            println!("statvfs error for {}: {:?}", *vol_name, e);
             0
         }
     };
