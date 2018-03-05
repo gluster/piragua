@@ -205,7 +205,7 @@ dependencies = [
 
 [[package]]
 name = "gluster-flexvol"
-version = "0.1.15"
+version = "0.1.16"
 dependencies = [
  "base64 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.30.0 (registry+https://github.com/rust-lang/crates.io-index)",
