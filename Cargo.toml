@@ -1,5 +1,5 @@
 [package]
-name = "gluster-flexvol"
+name = "piragua"
 version = "0.1.16"
 authors = ["Chris Holcombe <xfactor973@gmail.com>"]
 license = "apache2"

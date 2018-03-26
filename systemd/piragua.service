@@ -4,8 +4,8 @@ After=network.target
 
 [Service]
 Type=simple
-EnvironmentFile=/etc/gluster-flexvol/environment
-ExecStart=/usr/sbin/gluster-flexvol \
+EnvironmentFile=/etc/piragua/environment
+ExecStart=/usr/sbin/piragua \
   --volume=${GLUSTER_VOL}
 ExecReload=/bin/kill -SIGTERM $MAINPID
 KillMode=process
@@ -15,5 +15,5 @@ LimitNPROC=infinity
 TasksMax=infinity
 
 [Install]
-Alias=gluster-flexvol.service
+Alias=piragua.service
 WantedBy=multi-user.target

@@ -1,4 +1,4 @@
-# gluster_flexvol
+# Piragua
 kubernetes/openshift glusterfs thin heketi volumes
 
 This repo emulates the [heketi](https://github.com/heketi/heketi/wiki/API) api
@@ -17,7 +17,7 @@ an rpm file which is then published to Atlas.
 ## Deploying
 * Install the deb/rpm package for this on all of the glusterfs servers 
 * Set the correct environment variables in the 
-`/etc/gluster-flexvol/environment` file.
+`/etc/piragua/environment` file.
 * enable/start the systemd service.
 
 Big thanks to Miranda Shutt and David Hocky for helping me debug this

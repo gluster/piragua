@@ -947,7 +947,7 @@ fn rocket() -> rocket::Rocket {
 }
 
 fn main() {
-    let matches = App::new("gluster-flexvol")
+    let matches = App::new("piragua")
         .version(crate_version!())
         .author(crate_authors!())
         .about("Gluster thin Kubernetes volumes")
