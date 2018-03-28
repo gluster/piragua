@@ -2,7 +2,7 @@
 name = "piragua"
 version = "0.1.16"
 authors = ["Chris Holcombe <xfactor973@gmail.com>"]
-license = "apache2"
+license = "apache2/gplv2"
 
 [dependencies]
 base64 = "*"
