@@ -54,3 +54,8 @@ That is an openshift volume.  It also has a quota attached to it:
 -------------------------------------------------------------------------------------------------------------------------------
 /a08abef9-e4d2-499c-8b32-1b01ff855705      1.0GB     80%(819.2MB)  122.1MB 901.9MB              No  
 ```
+
+
+## Licensing
+Please take note that this repository is dual licensed under
+Apache2 and GPLv2
