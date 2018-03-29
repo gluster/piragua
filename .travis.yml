@@ -1,0 +1,10 @@
+language: rust
+rust:
+  - nightly
+dist: trusty
+cache: cargo
+addons:
+  apt:
+    packages:
+      - ceph-common
+      - glusterfs-common
