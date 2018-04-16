@@ -44,9 +44,6 @@ use rocket::request::{self, FromRequest};
 use rocket::response::status::Created;
 use uuid::Uuid;
 
-#[cfg(test)]
-mod tests;
-
 #[derive(Debug, Serialize)]
 struct GlusterClusters {
     id: String,
