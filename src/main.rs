@@ -87,9 +87,12 @@ struct CreateVolumeRequest {
 
 #[derive(Deserialize, Debug, Serialize)]
 pub enum VolumeType {
-    #[serde(rename = "replicate")] Replicate,
-    #[serde(rename = "disperse")] Disperse,
-    #[serde(rename = "none")] None,
+    #[serde(rename = "replicate")]
+    Replicate,
+    #[serde(rename = "disperse")]
+    Disperse,
+    #[serde(rename = "none")]
+    None,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -105,7 +108,8 @@ struct DisperseDurability {
 
 #[derive(Debug, Deserialize, Serialize)]
 struct Durability {
-    #[serde(rename = "type")] mount_type: Option<VolumeType>,
+    #[serde(rename = "type")]
+    mount_type: Option<VolumeType>,
     replicate: Option<ReplicaDurability>,
     //disperse: Option<DisperseDurability>,
 }
@@ -670,8 +674,7 @@ fn get_volume_info_by_id<'a>(
     let response = Response::build()
         .header(ContentType::JSON)
         .raw_header("X-Pending", "false")
-        .sized_body(Cursor::new(serde_json::to_string(&response_data)
-            .map_err(|e| e.to_string())?))
+        .sized_body(Cursor::new(serde_json::to_string(&response_data).map_err(|e| e.to_string())?))
         .finalize();
     println!("response: {:#?}", response);
     Ok(response)
@@ -771,8 +774,7 @@ fn get_volume_info<'a>(
     let response = Response::build()
         .header(ContentType::JSON)
         .raw_header("X-Pending", "false")
-        .sized_body(Cursor::new(serde_json::to_string(&response_data)
-            .map_err(|e| e.to_string())?))
+        .sized_body(Cursor::new(serde_json::to_string(&response_data).map_err(|e| e.to_string())?))
         .finalize();
     println!("response: {:#?}", response);
     Ok(response)
