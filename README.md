@@ -1,5 +1,4 @@
-# Piragua
-[![Build Status](https://travis-ci.org/gluster/piragua.svg?branch=master)](https://travis-ci.org/gluster/piragua)
+# Piragua [![Build Status](https://travis-ci.org/gluster/piragua.svg?branch=master)](https://travis-ci.org/gluster/piragua)
 kubernetes/openshift glusterfs thin heketi volumes
 
 This repo emulates the [heketi](https://github.com/heketi/heketi/wiki/API) api
