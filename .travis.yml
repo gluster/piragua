@@ -6,5 +6,4 @@ cache: cargo
 addons:
   apt:
     packages:
-      - ceph-common
       - glusterfs-common
