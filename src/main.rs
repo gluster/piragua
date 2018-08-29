@@ -20,8 +20,8 @@ extern crate uuid;
 use std::collections::HashMap;
 use std::env;
 use std::fs::{self, File};
-use std::io::{BufRead, BufReader, Cursor, Error, ErrorKind};
 use std::io::Result as IOResult;
+use std::io::{BufRead, BufReader, Cursor, Error, ErrorKind};
 use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -36,12 +36,12 @@ use gluster::volume::volume_add_quota;
 use itertools::Itertools;
 use jsonwebtoken::{decode, Algorithm, Validation};
 use libc::{DT_DIR, S_IRGRP, S_IRUSR, S_IRWXU, S_IWGRP, S_IXGRP, S_IXUSR};
-use rocket_contrib::Json;
-use rocket::{Outcome, Request, Response, State};
-use rocket::http::{ContentType, Status};
 use rocket::http::hyper::header::Location;
+use rocket::http::{ContentType, Status};
 use rocket::request::{self, FromRequest};
 use rocket::response::status::Created;
+use rocket::{Outcome, Request, Response, State};
+use rocket_contrib::Json;
 use uuid::Uuid;
 
 #[derive(Debug, Serialize)]
@@ -526,7 +526,8 @@ fn get_local_uuid() -> IOResult<Option<Uuid>> {
         let l = line?;
         if l.starts_with("UUID") {
             let l = l.replace("UUID=", "");
-            let guid = Uuid::from_str(&l).map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+            let guid =
+                Uuid::from_str(&l).map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
             return Ok(Some(guid));
         }
     }
@@ -671,8 +672,9 @@ fn get_volume_info_by_id<'a>(
     let response = Response::build()
         .header(ContentType::JSON)
         .raw_header("X-Pending", "false")
-        .sized_body(Cursor::new(serde_json::to_string(&response_data).map_err(|e| e.to_string())?))
-        .finalize();
+        .sized_body(Cursor::new(
+            serde_json::to_string(&response_data).map_err(|e| e.to_string())?,
+        )).finalize();
     println!("response: {:#?}", response);
     Ok(response)
 }
@@ -771,13 +773,18 @@ fn get_volume_info<'a>(
     let response = Response::build()
         .header(ContentType::JSON)
         .raw_header("X-Pending", "false")
-        .sized_body(Cursor::new(serde_json::to_string(&response_data).map_err(|e| e.to_string())?))
-        .finalize();
+        .sized_body(Cursor::new(
+            serde_json::to_string(&response_data).map_err(|e| e.to_string())?,
+        )).finalize();
     println!("response: {:#?}", response);
     Ok(response)
 }
 
-#[post("/volumes/<vol_name>/<id>/<name>/expand", format = "application/json", data = "<input>")]
+#[post(
+    "/volumes/<vol_name>/<id>/<name>/expand",
+    format = "application/json",
+    data = "<input>"
+)]
 fn expand_volume<'a>(
     _web_token: Jwt,
     vol_name: String,
@@ -847,13 +854,23 @@ fn delete_volume_fallback<'a>(
     // Clients will keep calling this and we need to return 204 when it's finished
     // This works out well because rm -rf could take awhile.
 
+    let mut response = Response::new();
     // Open the top level dir and find the nested dir_name for the client to later query
     // There should only be 1 dir in this top level dir
     let subdir_name = get_subdir_name(&Path::new(&vol_id), &state)?;
     println!("delete subdir: {:?}", subdir_name);
 
-    let mut response = Response::new();
-    response.set_status(Status::Accepted);
+    match subdir_name {
+        Some(_) => {
+            println!("Setting response to Accepted");
+            response.set_status(Status::Accepted);
+        }
+        None => {
+            println!("Setting response to NoContent ie Done");
+            response.set_status(Status::NoContent);
+            return Ok(response);
+        }
+    };
     response.set_header(Location(format!(
         "/volumes/{volume}/{id}/{name}",
         volume = *vol_name,
@@ -906,12 +923,12 @@ fn get_version() -> Json<Version> {
     Json(v)
 }
 
-#[error(500)]
+#[catch(500)]
 fn internal_error() -> &'static str {
     "Whoops! Looks like we messed up."
 }
 
-#[error(400)]
+#[catch(400)]
 fn not_found(req: &Request) -> String {
     format!("I couldn't find '{}'. Try something else?", req.uri())
 }
@@ -940,8 +957,7 @@ fn rocket() -> rocket::Rocket {
                 add_device,
                 delete_device,
             ],
-        )
-        .catch(errors![internal_error, not_found])
+        ).catch(catchers![internal_error, not_found])
         .manage(Mutex::new(HashMap::<String, String>::new()))
 }
 
@@ -956,8 +972,7 @@ fn main() {
                 .help("The gluster volume to manage")
                 .required(true)
                 .takes_value(true),
-        )
-        .get_matches();
+        ).get_matches();
     // This is safe.  clap enforces that this is required
     let volname = matches.value_of("volume").unwrap();
 
