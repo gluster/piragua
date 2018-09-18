@@ -915,6 +915,15 @@ fn list_volumes(_web_token: Jwt, state: State<Gluster>) -> Result<Json<VolumeLis
     Ok(Json(volumes))
 }
 
+#[get("/health")]
+fn healthy(state: State<Gluster>) -> Result<String, String> {
+    // If a directory can be opened we'll guess that Gluster is healthy
+    let _ = GlusterDirectory {
+        dir_handle: state.opendir(&Path::new("/")).map_err(|e| e.to_string())?,
+    };
+    Ok("".to_string())
+}
+
 #[get("/version")]
 fn get_version() -> Json<Version> {
     let v = Version {
@@ -938,24 +947,25 @@ fn rocket() -> rocket::Rocket {
         .mount(
             "/",
             routes![
-                get_version,
-                get_cluster_info,
+                add_device,
+                add_node,
                 create_cluster,
-                list_clusters,
-                delete_cluster,
-                get_volume_info,
-                get_volume_info_by_id,
-                list_volumes,
                 create_volume,
-                expand_volume,
+                delete_cluster,
+                delete_device,
+                delete_node,
                 delete_volume,
                 delete_volume_fallback,
-                get_node_info,
-                add_node,
-                delete_node,
+                expand_volume,
+                get_cluster_info,
                 get_device_info,
-                add_device,
-                delete_device,
+                get_node_info,
+                get_version,
+                get_volume_info,
+                get_volume_info_by_id,
+                healthy,
+                list_clusters,
+                list_volumes,
             ],
         ).catch(catchers![internal_error, not_found])
         .manage(Mutex::new(HashMap::<String, String>::new()))
