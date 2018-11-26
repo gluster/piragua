@@ -245,15 +245,10 @@ impl<'a, 'r> FromRequest<'a, 'r> for Jwt {
                         return Outcome::Failure((Status::BadRequest, e.to_string()));
                     }
                 };
-                return Outcome::Success(Jwt(token_data.claims));
+                Outcome::Success(Jwt(token_data.claims))
             }
-            None => {
-                return Outcome::Failure((
-                    Status::BadRequest,
-                    "JWT token missing from request".into(),
-                ));
-            }
-        };
+            None => Outcome::Failure((Status::BadRequest, "JWT token missing from request".into())),
+        }
     }
 }
 
@@ -284,9 +279,7 @@ fn get_cluster_info(
     }
 
     //List all the top level directories and return them as volumes
-    let d = GlusterDirectory {
-        dir_handle: state.opendir(&Path::new("/")).map_err(|e| e.to_string())?,
-    };
+    let d = state.opendir(&Path::new("/")).map_err(|e| e.to_string())?;
     for dir_entry in d {
         let dir_name = format!("{}", dir_entry.path.display());
         // Skip the parent and current dir entries
@@ -301,7 +294,7 @@ fn get_cluster_info(
         // Transform to Vec of String's
         nodes: peer_uuids
             .iter()
-            .map(|uuid| uuid.hyphenated().to_string())
+            .map(|uuid| uuid.to_hyphenated().to_string())
             .collect::<Vec<String>>(),
         volumes: vol_list,
     };
@@ -433,11 +426,11 @@ fn create_volume<'a>(
 ) -> Result<Response<'a>, String> {
     println!("volume request: {:#?}", input);
 
-    let id = Uuid::new_v4().hyphenated().to_string();
+    let id = Uuid::new_v4().to_hyphenated().to_string();
     let name = if input.name == "" {
         format!("vol_{}", id)
     } else {
-        if input.name.chars().any(|c| invalid_chars(&c)) {
+        if input.name.chars().any(|c| invalid_chars(c)) {
             println!("Invalid characters detected in name");
             return Err("Only numbers, letters, '-' or '_' are allowed in the volume name".into());
         }
@@ -458,19 +451,14 @@ fn create_volume<'a>(
     // Change the group id on it to match the requested one
     // root and the requesting user can read the directory
     // If gid is None we don't do anything.
-    match input.gid {
-        Some(gid) => {
-            state
-                .chown(&top_dir, 0, gid as u32)
-                .map_err(|e| e.to_string())?;
-            state
-                .chown(&sub_dir, 0, gid as u32)
-                .map_err(|e| e.to_string())?;
-        }
-        None => {
-            //Skip chown
-        }
-    };
+    if let Some(gid) = input.gid {
+        state
+            .chown(&top_dir, 0, gid as u32)
+            .map_err(|e| e.to_string())?;
+        state
+            .chown(&sub_dir, 0, gid as u32)
+            .map_err(|e| e.to_string())?;
+    }
 
     // root can read/execute and requesting user can read/write/execute
     state
@@ -536,7 +524,7 @@ fn get_local_uuid() -> IOResult<Option<Uuid>> {
 
 // Get the gluster peer ip address
 fn get_peer_info(uuid: &Uuid) -> IOResult<Option<IpAddr>> {
-    let f = File::open(format!("/var/lib/glusterd/peers/{}", uuid.hyphenated()))?;
+    let f = File::open(format!("/var/lib/glusterd/peers/{}", uuid.to_hyphenated()))?;
     let f = BufReader::new(f);
     for line in f.lines() {
         let l = line?;
@@ -555,7 +543,7 @@ fn get_gluster_vol(vol_id: &str) -> IOResult<HashMap<String, String>> {
     let f = BufReader::new(vol_file);
     for line in f.lines() {
         let l = line?;
-        let parts: Vec<&str> = l.split("=").collect();
+        let parts: Vec<&str> = l.split('=').collect();
         if parts.len() != 2 {
             // Skip broken data
             continue;
@@ -568,16 +556,13 @@ fn get_gluster_vol(vol_id: &str) -> IOResult<HashMap<String, String>> {
 fn get_subdir_name(p: &Path, g: &Gluster) -> Result<Option<String>, String> {
     let this = Path::new(".");
     let parent = Path::new("..");
-    let d = GlusterDirectory {
-        dir_handle: g.opendir(p).map_err(|e| e.to_string())?,
-    };
+    let d = g.opendir(p).map_err(|e| e.to_string())?;
     for dir_entry in d {
         if dir_entry.path == this || dir_entry.path == parent {
             continue;
         }
-        match dir_entry.file_type {
-            DT_DIR => return Ok(Some(format!("{}", dir_entry.path.display()))),
-            _ => {}
+        if let DT_DIR = dir_entry.file_type {
+            return Ok(Some(format!("{}", dir_entry.path.display())));
         }
     }
     Ok(None)
@@ -586,15 +571,15 @@ fn get_subdir_name(p: &Path, g: &Gluster) -> Result<Option<String>, String> {
 #[test]
 fn test_valid_chars() {
     let vol_name = "it_works-0";
-    assert_eq!(vol_name.chars().any(|c| invalid_chars(&c)), false);
+    assert_eq!(vol_name.chars().any(|c| invalid_chars(c)), false);
 
     let vol_name = "it_fails!&";
-    assert_eq!(vol_name.chars().any(|c| invalid_chars(&c)), true);
+    assert_eq!(vol_name.chars().any(|c| invalid_chars(c)), true);
 }
 
 // Returns true if this char is invalid
-fn invalid_chars(c: &char) -> bool {
-    !(c.is_alphabetic() || c.is_numeric() || c == &'-' || c == &'_')
+fn invalid_chars(c: char) -> bool {
+    !(c.is_alphabetic() || c.is_numeric() || c == '-' || c == '_')
 }
 
 #[get("/volumes/<id>")]
@@ -875,7 +860,7 @@ fn delete_volume_fallback<'a>(
         "/volumes/{volume}/{id}/{name}",
         volume = *vol_name,
         id = vol_id,
-        name = subdir_name.unwrap_or("".into()),
+        name = subdir_name.unwrap_or_else(|| "".into()),
     )));
 
     // Split this into the volume_name/volume_id and just delete the volume_id
@@ -893,9 +878,7 @@ fn delete_volume_fallback<'a>(
 #[get("/volumes")]
 fn list_volumes(_web_token: Jwt, state: State<Gluster>) -> Result<Json<VolumeList>, String> {
     let mut vol_list: Vec<String> = vec![];
-    let d = GlusterDirectory {
-        dir_handle: state.opendir(&Path::new("/")).map_err(|e| e.to_string())?,
-    };
+    let d = state.opendir(&Path::new("/")).map_err(|e| e.to_string())?;
     let this = Path::new(".");
     let parent = Path::new("..");
     for dir_entry in d {
@@ -903,10 +886,8 @@ fn list_volumes(_web_token: Jwt, state: State<Gluster>) -> Result<Json<VolumeLis
         if dir_entry.path == this || dir_entry.path == parent {
             continue;
         }
-        match dir_entry.file_type {
-            //Only append directories
-            DT_DIR => vol_list.push(format!("{}", format!("{}", dir_entry.path.display()),)),
-            _ => {}
+        if let DT_DIR = dir_entry.file_type {
+            vol_list.push(format!("{}", dir_entry.path.display()).to_string());
         }
     }
     let volumes = VolumeList { volumes: vol_list };
@@ -918,9 +899,7 @@ fn list_volumes(_web_token: Jwt, state: State<Gluster>) -> Result<Json<VolumeLis
 #[get("/health")]
 fn healthy(state: State<Gluster>) -> Result<String, String> {
     // If a directory can be opened we'll guess that Gluster is healthy
-    let _ = GlusterDirectory {
-        dir_handle: state.opendir(&Path::new("/")).map_err(|e| e.to_string())?,
-    };
+    let _ = state.opendir(&Path::new("/")).map_err(|e| e.to_string())?;
     Ok("".to_string())
 }
 
