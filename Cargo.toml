@@ -1,6 +1,6 @@
 [package]
 name = "piragua"
-version = "0.1.17"
+version = "0.1.18"
 authors = ["Chris Holcombe <xfactor973@gmail.com>"]
 license = "apache2/gplv2"
 

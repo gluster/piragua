@@ -1,6 +1,6 @@
 Name: piragua
 Version: 0.1
-Release: 17%{?dist}
+Release: 18%{?dist}
 Summary: Gluster Heketi service that provides directories as volumes.
 
 License: Apache2
