@@ -7,7 +7,7 @@ license = "apache2/gplv2"
 [dependencies]
 base64 = "~0.6"
 clap = "~2"
-gfapi-sys  = "~2.0" # gfapi
+gfapi-sys  = "~3.0" # gfapi
 gluster = "~1.0" # CLI library
 itertools = "*"
 libc = "*"
