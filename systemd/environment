@@ -1,5 +1,6 @@
 ROCKET_ADDRESS=0.0.0.0
 ROCKET_LOG=normal
 ROCKET_PORT=8080
+GLUSTER_LOG=/var/log/piragua_gfapi
 GLUSTER_VOL=gv0
 JWT_SECRET=super_secret

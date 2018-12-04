@@ -281,6 +281,7 @@ fn get_cluster_info(
     //List all the top level directories and return them as volumes
     let d = state.opendir(&Path::new("/")).map_err(|e| e.to_string())?;
     for dir_entry in d {
+        let dir_entry = dir_entry.map_err(|e| e.to_string())?;
         let dir_name = format!("{}", dir_entry.path.display());
         // Skip the parent and current dir entries
         if dir_name == ".." || dir_name == "." {
@@ -558,6 +559,7 @@ fn get_subdir_name(p: &Path, g: &Gluster) -> Result<Option<String>, String> {
     let parent = Path::new("..");
     let d = g.opendir(p).map_err(|e| e.to_string())?;
     for dir_entry in d {
+        let dir_entry = dir_entry.map_err(|e| e.to_string())?;
         if dir_entry.path == this || dir_entry.path == parent {
             continue;
         }
@@ -882,6 +884,7 @@ fn list_volumes(_web_token: Jwt, state: State<Gluster>) -> Result<Json<VolumeLis
     let this = Path::new(".");
     let parent = Path::new("..");
     for dir_entry in d {
+        let dir_entry = dir_entry.map_err(|e| e.to_string())?;
         // Skip the parent and current dir entries
         if dir_entry.path == this || dir_entry.path == parent {
             continue;
@@ -898,8 +901,9 @@ fn list_volumes(_web_token: Jwt, state: State<Gluster>) -> Result<Json<VolumeLis
 
 #[get("/health")]
 fn healthy(state: State<Gluster>) -> Result<String, String> {
-    // If a directory can be opened we'll guess that Gluster is healthy
-    let _ = state.opendir(&Path::new("/")).map_err(|e| e.to_string())?;
+    // Panic and segfault the program if the gluster api connection is bad
+    // systemd will then restart the program resulting in a fresh connection
+    state.opendir(&Path::new("/")).unwrap();
     Ok("".to_string())
 }
 
@@ -973,6 +977,16 @@ fn main() {
             return;
         }
     };
+    let gfapi_log = match env::var("GLUSTER_LOG") {
+        Ok(s) => s,
+        Err(e) => {
+            println!("getting environment variable GLUSTER_LOG failed: {:?}", e);
+            return;
+        }
+    };
+    if let Err(e) = gluster.set_logging(Path::new(&gfapi_log), GlusterLogLevel::Warning){
+        println!("setting gluster log to {} failed: {:?}", gfapi_log, e);
+    }
 
     rocket()
         .manage(gluster)
