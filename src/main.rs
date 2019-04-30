@@ -1,5 +1,4 @@
-#![feature(plugin, decl_macro)]
-#![plugin(rocket_codegen)]
+#![feature(proc_macro_hygiene, decl_macro)]
 
 extern crate base64;
 #[macro_use]
@@ -9,6 +8,7 @@ extern crate gluster;
 extern crate itertools;
 extern crate jsonwebtoken;
 extern crate libc;
+#[macro_use]
 extern crate rocket;
 extern crate rocket_contrib;
 extern crate serde;
@@ -41,7 +41,7 @@ use rocket::http::{ContentType, Status};
 use rocket::request::{self, FromRequest};
 use rocket::response::status::Created;
 use rocket::{Outcome, Request, Response, State};
-use rocket_contrib::Json;
+use rocket_contrib::json::Json;
 use uuid::Uuid;
 
 #[derive(Debug, Serialize)]
@@ -233,7 +233,7 @@ impl<'a, 'r> FromRequest<'a, 'r> for Jwt {
             Some(auth_token) => {
                 // Set the default params for validation
                 let mut validate = Validation::default();
-                validate.algorithms = Some(vec![Algorithm::HS256]); // set our Algorithm
+                validate.algorithms = vec![Algorithm::HS256]; // set our Algorithm
                 validate.leeway = 1000 * 60; // Add 1 minute of leeway for clock skew
                 validate.validate_nbf = false;
 
@@ -950,7 +950,7 @@ fn rocket() -> rocket::Rocket {
                 list_clusters,
                 list_volumes,
             ],
-        ).catch(catchers![internal_error, not_found])
+        ).register(catchers![internal_error, not_found])
         .manage(Mutex::new(HashMap::<String, String>::new()))
 }
 
