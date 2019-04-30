@@ -1,46 +1,33 @@
 #![feature(proc_macro_hygiene, decl_macro)]
 
-extern crate base64;
 #[macro_use]
 extern crate clap;
-extern crate gfapi_sys;
-extern crate gluster;
-extern crate itertools;
-extern crate jsonwebtoken;
-extern crate libc;
 #[macro_use]
 extern crate rocket;
-extern crate rocket_contrib;
-extern crate serde;
 #[macro_use]
 extern crate serde_derive;
-extern crate serde_json;
-extern crate uuid;
+use serde_json;
 
-use std::collections::HashMap;
-use std::env;
-use std::fs::{self, File};
-use std::io::Result as IOResult;
-use std::io::{BufRead, BufReader, Cursor, Error, ErrorKind};
-use std::net::IpAddr;
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
-use std::sync::Mutex;
+use std::{collections::HashMap,
+          env,
+          fs::{self, File},
+          io::{BufRead, BufReader, Cursor, Error, ErrorKind, Result as IOResult},
+          net::IpAddr,
+          path::{Path, PathBuf},
+          str::FromStr,
+          sync::Mutex};
 
 use base64::decode as base64_decode;
 use clap::{App, Arg};
 use gfapi_sys::gluster::*;
-use gluster::get_local_ip;
-use gluster::peer::peer_list;
-use gluster::volume::volume_add_quota;
+use gluster::{get_local_ip, peer::peer_list, volume::volume_add_quota};
 use itertools::Itertools;
 use jsonwebtoken::{decode, Algorithm, Validation};
 use libc::{DT_DIR, S_IRGRP, S_IRUSR, S_IRWXU, S_IWGRP, S_IXGRP, S_IXUSR};
-use rocket::http::hyper::header::Location;
-use rocket::http::{ContentType, Status};
-use rocket::request::{self, FromRequest};
-use rocket::response::status::Created;
-use rocket::{Outcome, Request, Response, State};
+use rocket::{http::{hyper::header::Location, ContentType, Status},
+             request::{self, FromRequest},
+             response::status::Created,
+             Outcome, Request, Response, State};
 use rocket_contrib::json::Json;
 use uuid::Uuid;
 
@@ -254,21 +241,17 @@ impl<'a, 'r> FromRequest<'a, 'r> for Jwt {
 
 #[post("/clusters", format = "application/json")]
 fn create_cluster(_web_token: Jwt) -> Created<Json<GlusterClusters>> {
-    let clusters = GlusterClusters {
-        id: "cluster-test".to_string(),
-        nodes: vec![],
-        volumes: vec![],
-    };
+    let clusters =
+        GlusterClusters { id: "cluster-test".to_string(), nodes: vec![], volumes: vec![] };
 
     Created("".to_string(), Some(Json(clusters)))
 }
 
 #[get("/clusters/<cluster_id>")]
-fn get_cluster_info(
-    _web_token: Jwt,
-    cluster_id: String,
-    state: State<Gluster>,
-) -> Result<Json<GlusterClusters>, String> {
+fn get_cluster_info(_web_token: Jwt,
+                    cluster_id: String,
+                    state: State<'_, Gluster>)
+                    -> Result<Json<GlusterClusters>, String> {
     let mut vol_list: Vec<String> = vec![];
 
     // Get all the peers in the cluster
@@ -290,29 +273,21 @@ fn get_cluster_info(
         vol_list.push(dir_name);
     }
 
-    let clusters = GlusterClusters {
-        id: cluster_id,
-        // Transform to Vec of String's
-        nodes: peer_uuids
-            .iter()
-            .map(|uuid| uuid.to_hyphenated().to_string())
-            .collect::<Vec<String>>(),
-        volumes: vol_list,
-    };
+    let clusters = GlusterClusters { id: cluster_id,
+                                     // Transform to Vec of String's
+                                     nodes: peer_uuids.iter()
+                                                      .map(|uuid| uuid.to_hyphenated().to_string())
+                                                      .collect::<Vec<String>>(),
+                                     volumes: vol_list };
 
     Ok(Json(clusters))
 }
 
 #[get("/clusters")]
-fn list_clusters(_web_token: Jwt, state: State<String>) -> Json<ClusterList> {
+fn list_clusters(_web_token: Jwt, state: State<'_, String>) -> Json<ClusterList> {
     // Only return the single volume as a cluster
-    let clusters = ClusterList {
-        clusters: vec![state.inner().clone()],
-    };
-    println!(
-        "list clusters: {}",
-        serde_json::to_string(&clusters).unwrap()
-    );
+    let clusters = ClusterList { clusters: vec![state.inner().clone()] };
+    println!("list clusters: {}", serde_json::to_string(&clusters).unwrap());
     Json(clusters)
 }
 
@@ -352,22 +327,16 @@ fn get_node_info(_web_token: Jwt, id: String) -> Result<Json<NodeInfoResponse>, 
         }
     }
 
-    let resp = NodeInfoResponse {
-        zone: 1,
-        id: node_uuid,
-        cluster: "cluster-test".into(),
-        hostnames: ManagedHosts {
-            // Everyone manages themselves
-            manage: vec![host_ip.to_string()],
-            storage: vec![host_ip.to_string()],
-        },
-        devices: vec![],
-        state: "online".into(),
-    };
-    println!(
-        "node info response: {}",
-        serde_json::to_string(&resp).map_err(|e| e.to_string())?
-    );
+    let resp = NodeInfoResponse { zone: 1,
+                                  id: node_uuid,
+                                  cluster: "cluster-test".into(),
+                                  hostnames: ManagedHosts { // Everyone manages themselves
+                                                            manage: vec![host_ip.to_string()],
+                                                            storage:
+                                                                vec![host_ip.to_string()] },
+                                  devices: vec![],
+                                  state: "online".into() };
+    println!("node info response: {}", serde_json::to_string(&resp).map_err(|e| e.to_string())?);
     Ok(Json(resp))
 }
 
@@ -405,33 +374,26 @@ fn delete_device<'a>(_web_token: Jwt, _id: String) -> Result<Response<'a>, Strin
 
 #[get("/devices/<_device_id>")]
 fn get_device_info(_web_token: Jwt, _device_id: String) -> Json<DeviceInfo> {
-    let device_info = DeviceInfo {
-        name: PathBuf::from("/dev/sda"), //": "/dev/sdh",
-        storage: Storage {
-            total: 0,
-            free: 0,
-            used: 0,
-        },
-        id: "".into(),
-        bricks: vec![],
-    };
+    let device_info = DeviceInfo { name: PathBuf::from("/dev/sda"), //": "/dev/sdh",
+                                   storage: Storage { total: 0, free: 0, used: 0 },
+                                   id: "".into(),
+                                   bricks: vec![] };
     Json(device_info)
 }
 
 #[post("/volumes", format = "application/json", data = "<input>")]
-fn create_volume<'a>(
-    _web_token: Jwt,
-    input: Json<CreateVolumeRequest>,
-    state: State<Gluster>,
-    vol_name: State<String>,
-) -> Result<Response<'a>, String> {
+fn create_volume<'a>(_web_token: Jwt,
+                     input: Json<CreateVolumeRequest>,
+                     state: State<'_, Gluster>,
+                     vol_name: State<'_, String>)
+                     -> Result<Response<'a>, String> {
     println!("volume request: {:#?}", input);
 
     let id = Uuid::new_v4().to_hyphenated().to_string();
     let name = if input.name == "" {
         format!("vol_{}", id)
     } else {
-        if input.name.chars().any(|c| invalid_chars(c)) {
+        if input.name.chars().any(invalid_chars) {
             println!("Invalid characters detected in name");
             return Err("Only numbers, letters, '-' or '_' are allowed in the volume name".into());
         }
@@ -453,28 +415,18 @@ fn create_volume<'a>(
     // root and the requesting user can read the directory
     // If gid is None we don't do anything.
     if let Some(gid) = input.gid {
-        state
-            .chown(&top_dir, 0, gid as u32)
-            .map_err(|e| e.to_string())?;
-        state
-            .chown(&sub_dir, 0, gid as u32)
-            .map_err(|e| e.to_string())?;
+        state.chown(&top_dir, 0, gid as u32).map_err(|e| e.to_string())?;
+        state.chown(&sub_dir, 0, gid as u32).map_err(|e| e.to_string())?;
     }
 
     // root can read/execute and requesting user can read/write/execute
-    state
-        .chmod(&top_dir, S_IRUSR | S_IXUSR | S_IRGRP | S_IWGRP | S_IXGRP)
-        .map_err(|e| e.to_string())?;
-    state
-        .chmod(&sub_dir, S_IRUSR | S_IXUSR | S_IRGRP | S_IWGRP | S_IXGRP)
-        .map_err(|e| e.to_string())?;
+    state.chmod(&top_dir, S_IRUSR | S_IXUSR | S_IRGRP | S_IWGRP | S_IXGRP)
+         .map_err(|e| e.to_string())?;
+    state.chmod(&sub_dir, S_IRUSR | S_IXUSR | S_IRGRP | S_IWGRP | S_IXGRP)
+         .map_err(|e| e.to_string())?;
 
     let quota_path = PathBuf::from(format!("/{}", id));
-    println!(
-        "Adding {}GB sized quota to: {}",
-        input.size,
-        quota_path.display()
-    );
+    println!("Adding {}GB sized quota to: {}", input.size, quota_path.display());
     // Convert input.size to bytes
     match volume_add_quota(&vol_name, &quota_path, input.size * 1024 * 1024 * 1024) {
         Ok(_) => {}
@@ -484,12 +436,10 @@ fn create_volume<'a>(
     }
 
     let mut response = Response::new();
-    response.set_header(Location(format!(
-        "/volumes/{volume}/{id}/{name}",
-        volume = *vol_name,
-        id = id,
-        name = name
-    )));
+    response.set_header(Location(format!("/volumes/{volume}/{id}/{name}",
+                                         volume = *vol_name,
+                                         id = id,
+                                         name = name)));
     response.set_status(Status::Accepted);
 
     Ok(response)
@@ -500,8 +450,10 @@ fn get_peer_uuids() -> IOResult<Vec<Uuid>> {
     let mut uuids: Vec<Uuid> = Vec::new();
     for entry in fs::read_dir(Path::new("/var/lib/glusterd/peers"))? {
         let entry = entry?;
-        let u = Uuid::from_str(&entry.file_name().to_string_lossy())
-            .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+        let u = Uuid::from_str(&entry.file_name().to_string_lossy()).map_err(|e| {
+                                                                        Error::new(ErrorKind::Other,
+                                                                                   e.to_string())
+                                                                    })?;
         uuids.push(u);
     }
     Ok(uuids)
@@ -515,8 +467,7 @@ fn get_local_uuid() -> IOResult<Option<Uuid>> {
         let l = line?;
         if l.starts_with("UUID") {
             let l = l.replace("UUID=", "");
-            let guid =
-                Uuid::from_str(&l).map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+            let guid = Uuid::from_str(&l).map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
             return Ok(Some(guid));
         }
     }
@@ -580,17 +531,14 @@ fn test_valid_chars() {
 }
 
 // Returns true if this char is invalid
-fn invalid_chars(c: char) -> bool {
-    !(c.is_alphabetic() || c.is_numeric() || c == '-' || c == '_')
-}
+fn invalid_chars(c: char) -> bool { !(c.is_alphabetic() || c.is_numeric() || c == '-' || c == '_') }
 
 #[get("/volumes/<id>")]
-fn get_volume_info_by_id<'a>(
-    _web_token: Jwt,
-    id: String,
-    vol_name: State<String>,
-    state: State<Gluster>,
-) -> Result<Response<'a>, String> {
+fn get_volume_info_by_id<'a>(_web_token: Jwt,
+                             id: String,
+                             vol_name: State<'_, String>,
+                             state: State<'_, Gluster>)
+                             -> Result<Response<'a>, String> {
     let vol_exists = state.exists(&Path::new(&id)).map_err(|e| e.to_string())?;
 
     if !vol_exists {
@@ -603,10 +551,8 @@ fn get_volume_info_by_id<'a>(
     let name = get_subdir_name(&Path::new(&id), &state)?;
 
     let mut mount_options: HashMap<String, String> = HashMap::new();
-    mount_options.insert(
-        "backup-volfile-servers".into(),
-        backup_servers.iter().join(",").to_string(),
-    );
+    mount_options.insert("backup-volfile-servers".into(),
+                         backup_servers.iter().join(",").to_string());
     let quota_path = PathBuf::from(format!("/{}", id));
     let quota_size: u64 = match state.statvfs(&quota_path) {
         Ok(stat) => {
@@ -619,43 +565,29 @@ fn get_volume_info_by_id<'a>(
         }
     };
 
-    let response_data = VolumeInfo {
-        name: format!(
-            "{volume}/{id}/{name}",
-            volume = *vol_name,
-            id = id,
-            name = name.clone().unwrap_or("".into())
-        ),
-        id: id.clone(),
-        cluster: "cluster-test".into(),
-        size: quota_size,
-        durability: Durability {
-            mount_type: Some(VolumeType::Replicate),
-            replicate: Some(ReplicaDurability { replica: Some(3) }),
-        },
-        snapshot: Snapshot {
-            enable: Some(true),
-            factor: Some(1.20),
-        },
-        mount: Mount {
-            glusterfs: GlusterFsMount {
-                hosts: backup_servers,
-                device: format!(
+    let response_data =
+        VolumeInfo { name: format!("{volume}/{id}/{name}",
+                                   volume = *vol_name,
+                                   id = id,
+                                   name = name.clone().unwrap_or_else(|| "".into())),
+                     id: id.clone(),
+                     cluster: "cluster-test".into(),
+                     size: quota_size,
+                     durability: Durability { mount_type: Some(VolumeType::Replicate),
+                                              replicate:
+                                                  Some(ReplicaDurability { replica: Some(3) }) },
+                     snapshot: Snapshot { enable: Some(true), factor: Some(1.20) },
+                     mount: Mount { glusterfs: GlusterFsMount { hosts: backup_servers,
+                                                                device: format!(
                     "{server}:/{volume}/{id}/{name}",
                     server = peers[0].hostname,
                     volume = *vol_name,
                     id = id,
-                    name = name.unwrap_or("".into())
+                    name = name.unwrap_or_else(|| "".into())
                 ),
-                options: mount_options,
-            },
-        },
-        bricks: vec![],
-    };
-    println!(
-        "VolumeInfo: {}",
-        serde_json::to_string(&response_data).map_err(|e| e.to_string())?
-    );
+                                                                options: mount_options } },
+                     bricks: vec![] };
+    println!("VolumeInfo: {}", serde_json::to_string(&response_data).map_err(|e| e.to_string())?);
     let response = Response::build()
         .header(ContentType::JSON)
         .raw_header("X-Pending", "false")
@@ -667,14 +599,13 @@ fn get_volume_info_by_id<'a>(
 }
 
 #[get("/volumes/<_volume>/<id>/<name>")]
-fn get_volume_info<'a>(
-    _web_token: Jwt,
-    _volume: String,
-    id: String,
-    name: String,
-    vol_name: State<String>,
-    state: State<Gluster>,
-) -> Result<Response<'a>, String> {
+fn get_volume_info<'a>(_web_token: Jwt,
+                       _volume: String,
+                       id: String,
+                       name: String,
+                       vol_name: State<'_, String>,
+                       state: State<'_, Gluster>)
+                       -> Result<Response<'a>, String> {
     let vol_exists = state.exists(&Path::new(&id)).map_err(|e| e.to_string())?;
 
     if !vol_exists {
@@ -704,10 +635,8 @@ fn get_volume_info<'a>(
     let backup_servers: Vec<String> = peers.iter().map(|ref p| p.hostname.clone()).collect();
 
     let mut mount_options: HashMap<String, String> = HashMap::new();
-    mount_options.insert(
-        "backup-volfile-servers".into(),
-        backup_servers.iter().join(",").to_string(),
-    );
+    mount_options.insert("backup-volfile-servers".into(),
+                         backup_servers.iter().join(",").to_string());
     let quota_path = PathBuf::from(format!("/{}", id));
     let quota_size: u64 = match state.statvfs(&quota_path) {
         Ok(stat) => {
@@ -720,43 +649,29 @@ fn get_volume_info<'a>(
         }
     };
 
-    let response_data = VolumeInfo {
-        name: format!(
-            "{volume}/{id}/{name}",
-            volume = *vol_name,
-            id = id,
-            name = name
-        ),
-        id: id.clone(),
-        cluster: "cluster-test".into(),
-        size: quota_size,
-        durability: Durability {
-            mount_type: Some(VolumeType::Replicate),
-            replicate: Some(ReplicaDurability { replica: Some(3) }),
-        },
-        snapshot: Snapshot {
-            enable: Some(true),
-            factor: Some(1.20),
-        },
-        mount: Mount {
-            glusterfs: GlusterFsMount {
-                hosts: backup_servers,
-                device: format!(
+    let response_data =
+        VolumeInfo { name: format!("{volume}/{id}/{name}",
+                                   volume = *vol_name,
+                                   id = id,
+                                   name = name),
+                     id: id.clone(),
+                     cluster: "cluster-test".into(),
+                     size: quota_size,
+                     durability: Durability { mount_type: Some(VolumeType::Replicate),
+                                              replicate:
+                                                  Some(ReplicaDurability { replica: Some(3) }) },
+                     snapshot: Snapshot { enable: Some(true), factor: Some(1.20) },
+                     mount: Mount { glusterfs: GlusterFsMount { hosts: backup_servers,
+                                                                device: format!(
                     "{server}:/{volume}/{id}/{name}",
                     server = peers[0].hostname,
                     volume = *vol_name,
                     id = id,
                     name = name
                 ),
-                options: mount_options,
-            },
-        },
-        bricks: vec![],
-    };
-    println!(
-        "VolumeInfo: {}",
-        serde_json::to_string(&response_data).map_err(|e| e.to_string())?
-    );
+                                                                options: mount_options } },
+                     bricks: vec![] };
+    println!("VolumeInfo: {}", serde_json::to_string(&response_data).map_err(|e| e.to_string())?);
     let response = Response::build()
         .header(ContentType::JSON)
         .raw_header("X-Pending", "false")
@@ -767,29 +682,22 @@ fn get_volume_info<'a>(
     Ok(response)
 }
 
-#[post(
-    "/volumes/<vol_name>/<id>/<name>/expand",
-    format = "application/json",
-    data = "<input>"
-)]
-fn expand_volume<'a>(
-    _web_token: Jwt,
-    vol_name: String,
-    id: String,
-    name: String,
-    input: Json<ExpandVolumeRequest>,
-) -> Result<Response<'a>, String> {
+#[post("/volumes/<vol_name>/<id>/<name>/expand", format = "application/json", data = "<input>")]
+fn expand_volume<'a>(_web_token: Jwt,
+                     vol_name: String,
+                     id: String,
+                     name: String,
+                     input: Json<ExpandVolumeRequest>)
+                     -> Result<Response<'a>, String> {
     let mut response = Response::new();
     response.set_header(Location(format!("/volumes/{}/{}/{}", vol_name, id, name)));
     response.set_status(Status::Accepted);
 
     // If this doesn't have a quota already it'll fail to remove
     let quota_path = PathBuf::from(format!("/{}", id));
-    println!(
-        "Expanding quota on {} to {}",
-        quota_path.display(),
-        input.expand_size * 1024 * 1024 * 1024
-    );
+    println!("Expanding quota on {} to {}",
+             quota_path.display(),
+             input.expand_size * 1024 * 1024 * 1024);
     // input.expand_size needs to be converted to bytes from GB of input
     volume_add_quota(
         &vol_name,
@@ -801,43 +709,37 @@ fn expand_volume<'a>(
 }
 
 #[delete("/volumes/<vol_name>/<id>/<name>")]
-fn delete_volume<'a>(
-    _web_token: Jwt,
-    vol_name: String,
-    id: String,
-    name: String,
-    state: State<Gluster>,
-) -> Result<Response<'a>, String> {
+fn delete_volume<'a>(_web_token: Jwt,
+                     vol_name: String,
+                     id: String,
+                     name: String,
+                     state: State<'_, Gluster>)
+                     -> Result<Response<'a>, String> {
     // Clients will keep calling this and we need to return 204 when it's finished
     // This works out well because rm -rf could take awhile.
     let mut response = Response::new();
     response.set_status(Status::Accepted);
-    response.set_header(Location(format!(
-        "/volumes/{volume}/{id}/{name}",
-        volume = vol_name,
-        id = id,
-        name = name
-    )));
+    response.set_header(Location(format!("/volumes/{volume}/{id}/{name}",
+                                         volume = vol_name,
+                                         id = id,
+                                         name = name)));
 
     // Split this into the volume_name/volume_id and just delete the volume_id
     println!("Deleting {}", id);
 
     // Delete the directory.
     // TODO: How can we background this and tell the client to come back later?
-    state
-        .remove_dir_all(&Path::new(&id))
-        .map_err(|e| e.to_string())?;
+    state.remove_dir_all(&Path::new(&id)).map_err(|e| e.to_string())?;
 
     Ok(response)
 }
 
 #[delete("/volumes/<vol_id>")]
-fn delete_volume_fallback<'a>(
-    _web_token: Jwt,
-    vol_id: String,
-    vol_name: State<String>,
-    state: State<Gluster>,
-) -> Result<Response<'a>, String> {
+fn delete_volume_fallback<'a>(_web_token: Jwt,
+                              vol_id: String,
+                              vol_name: State<'_, String>,
+                              state: State<'_, Gluster>)
+                              -> Result<Response<'a>, String> {
     // Clients will keep calling this and we need to return 204 when it's finished
     // This works out well because rm -rf could take awhile.
 
@@ -858,27 +760,23 @@ fn delete_volume_fallback<'a>(
             return Ok(response);
         }
     };
-    response.set_header(Location(format!(
-        "/volumes/{volume}/{id}/{name}",
-        volume = *vol_name,
-        id = vol_id,
-        name = subdir_name.unwrap_or_else(|| "".into()),
-    )));
+    response.set_header(Location(format!("/volumes/{volume}/{id}/{name}",
+                                         volume = *vol_name,
+                                         id = vol_id,
+                                         name = subdir_name.unwrap_or_else(|| "".into()),)));
 
     // Split this into the volume_name/volume_id and just delete the volume_id
     println!("Deleting {}", vol_id);
 
     // Delete the directory.
     // TODO: How can we background this and tell the client to come back later?
-    state
-        .remove_dir_all(&Path::new(&vol_id))
-        .map_err(|e| e.to_string())?;
+    state.remove_dir_all(&Path::new(&vol_id)).map_err(|e| e.to_string())?;
 
     Ok(response)
 }
 
 #[get("/volumes")]
-fn list_volumes(_web_token: Jwt, state: State<Gluster>) -> Result<Json<VolumeList>, String> {
+fn list_volumes(_web_token: Jwt, state: State<'_, Gluster>) -> Result<Json<VolumeList>, String> {
     let mut vol_list: Vec<String> = vec![];
     let d = state.opendir(&Path::new("/")).map_err(|e| e.to_string())?;
     let this = Path::new(".");
@@ -900,7 +798,7 @@ fn list_volumes(_web_token: Jwt, state: State<Gluster>) -> Result<Json<VolumeLis
 }
 
 #[get("/health")]
-fn healthy(state: State<Gluster>) -> Result<String, String> {
+fn healthy(state: State<'_, Gluster>) -> Result<String, String> {
     // Panic and segfault the program if the gluster api connection is bad
     // systemd will then restart the program resulting in a fresh connection
     state.opendir(&Path::new("/")).unwrap();
@@ -909,63 +807,53 @@ fn healthy(state: State<Gluster>) -> Result<String, String> {
 
 #[get("/version")]
 fn get_version() -> Json<Version> {
-    let v = Version {
-        version: crate_version!().to_string(),
-    };
+    let v = Version { version: crate_version!().to_string() };
     Json(v)
 }
 
 #[catch(500)]
-fn internal_error() -> &'static str {
-    "Whoops! Looks like we messed up."
-}
+fn internal_error() -> &'static str { "Whoops! Looks like we messed up." }
 
 #[catch(400)]
-fn not_found(req: &Request) -> String {
+fn not_found(req: &Request<'_>) -> String {
     format!("I couldn't find '{}'. Try something else?", req.uri())
 }
 
 fn rocket() -> rocket::Rocket {
-    rocket::ignite()
-        .mount(
-            "/",
-            routes![
-                add_device,
-                add_node,
-                create_cluster,
-                create_volume,
-                delete_cluster,
-                delete_device,
-                delete_node,
-                delete_volume,
-                delete_volume_fallback,
-                expand_volume,
-                get_cluster_info,
-                get_device_info,
-                get_node_info,
-                get_version,
-                get_volume_info,
-                get_volume_info_by_id,
-                healthy,
-                list_clusters,
-                list_volumes,
-            ],
-        ).register(catchers![internal_error, not_found])
-        .manage(Mutex::new(HashMap::<String, String>::new()))
+    rocket::ignite().mount("/",
+                           routes![add_device,
+                                   add_node,
+                                   create_cluster,
+                                   create_volume,
+                                   delete_cluster,
+                                   delete_device,
+                                   delete_node,
+                                   delete_volume,
+                                   delete_volume_fallback,
+                                   expand_volume,
+                                   get_cluster_info,
+                                   get_device_info,
+                                   get_node_info,
+                                   get_version,
+                                   get_volume_info,
+                                   get_volume_info_by_id,
+                                   healthy,
+                                   list_clusters,
+                                   list_volumes,])
+                    .register(catchers![internal_error, not_found])
+                    .manage(Mutex::new(HashMap::<String, String>::new()))
 }
 
 fn main() {
-    let matches = App::new("piragua")
-        .version(crate_version!())
-        .author(crate_authors!())
-        .about("Gluster thin Kubernetes volumes")
-        .arg(
-            Arg::with_name("volume")
-                .long("volume")
-                .help("The gluster volume to manage")
-                .required(true)
-                .takes_value(true),
-        ).get_matches();
+    let matches =
+        App::new("piragua").version(crate_version!())
+                           .author(crate_authors!())
+                           .about("Gluster thin Kubernetes volumes")
+                           .arg(Arg::with_name("volume").long("volume")
+                                                        .help("The gluster volume to manage")
+                                                        .required(true)
+                                                        .takes_value(true))
+                           .get_matches();
     // This is safe.  clap enforces that this is required
     let volname = matches.value_of("volume").unwrap();
 
@@ -984,12 +872,9 @@ fn main() {
             return;
         }
     };
-    if let Err(e) = gluster.set_logging(Path::new(&gfapi_log), GlusterLogLevel::Warning){
+    if let Err(e) = gluster.set_logging(Path::new(&gfapi_log), GlusterLogLevel::Warning) {
         println!("setting gluster log to {} failed: {:?}", gfapi_log, e);
     }
 
-    rocket()
-        .manage(gluster)
-        .manage(volname.to_string())
-        .launch();
+    rocket().manage(gluster).manage(volname.to_string()).launch();
 }

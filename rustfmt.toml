@@ -1,0 +1,14 @@
+indent_style = "Visual"
+use_small_heuristics = "Max"
+condense_wildcard_suffixes = true
+fn_single_line = true
+imports_indent = "Visual"
+merge_imports = true
+reorder_impl_items = true
+struct_lit_single_line = true
+use_field_init_shorthand = true
+use_try_shorthand = true
+format_doc_comments = true
+match_arm_blocks = true
+edition = "2018"
+unstable_features = true
