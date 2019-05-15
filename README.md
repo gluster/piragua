@@ -12,6 +12,7 @@ The 3.12 release introduced deep mount support for fuse.
 * Run `cargo build --release` with a nightly version of rust to build
 * Alternatively you can run build.sh and build for a different OS version
 * DEB's and RPM's will be published with each release
+* `build.sh -d {os_name} -p {build_dir}` can also be run if needed to produce packages.  
 
 ## Deploying
 * Install the deb/rpm package for this on all of the glusterfs servers 
