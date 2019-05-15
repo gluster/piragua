@@ -45,7 +45,7 @@ fi
 set -euo pipefail
 
 echo "About to launch ${distro} container"
-container="gluster-flexvol-build-$RANDOM"
+container="gluster-piragua-$RANDOM"
 
 function finish {
    echo "Cleaning up: ($?)!"
@@ -66,7 +66,7 @@ case "$distro" in
       echo "Installing deps"
       docker exec ${container} yum update -y
       echo "installing centos-release-gluster"
-      docker exec ${container} yum install -y centos-release-gluster openssl-devel.x86_64
+      docker exec ${container} yum install -y centos-release-gluster openssl-devel.x86_64 rpm-build
       echo "installing gfapi"
       packages="glusterfs-api-devel glusterfs-api gcc"
       docker exec ${container} yum install -y ${packages}
@@ -97,8 +97,15 @@ docker exec ${container} /root/rustup.sh --default-toolchain nightly -y
 
 echo "Building"
 docker exec ${container} /root/.cargo/bin/cargo build --release --all
-
-docker exec ${container} mv target/release/gluster-flexvol target/release/gluster-flexvol-${distro}
+case "$distro" in 
+   centos*)
+	echo "Building rpm"
+	docker exec ${container} rpmbuild --define "_builddir /build" -bb piragua.spec
+	rpm_file=$(docker exec ${container} ls /root/rpmbuild/RPMS/x86_64/)
+	docker cp ${container}:/root/rpmbuild/RPMS/x86_64/${rpm_file} .
+	;;
+esac
+docker exec ${container} mv target/release/piragua target/release/piragua-${distro}
 
 echo "Release directory"
 ls ${path}/target/release/

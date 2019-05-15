@@ -1,6 +1,6 @@
 Name: piragua
 Version: 0.1
-Release: 18%{?dist}
+Release: 19%{?dist}
 Summary: Gluster Heketi service that provides directories as volumes.
 
 License: Apache2
@@ -21,7 +21,7 @@ Gluster Heketi service that provides directories as volumes.
 %install
 rm -rf $RPM_BUILD_ROOT
 mkdir $RPM_BUILD_ROOT
-mkdir -p $RPM_BUILD_ROOT/usr/sbin $RPM_BUILD_ROOT/etc/piragua $RPM_BUILD_ROOT/lib/systemd/system
+mkdir -p $RPM_BUILD_ROOT/usr/sbin $RPM_BUILD_ROOT/etc/piragua $RPM_BUILD_ROOT/lib/systemd/system $RPM_BUILD_ROOT/target/release
 
 cp $RPM_BUILD_DIR/target/release/piragua $RPM_BUILD_ROOT/usr/sbin/piragua
 cp $RPM_BUILD_DIR/systemd/piragua.service $RPM_BUILD_ROOT/lib/systemd/system
